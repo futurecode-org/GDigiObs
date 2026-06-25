@@ -1,6 +1,6 @@
 from model.refresh_token import RefreshTokenModel
 from core.security import get_password_hash, verify_password, create_access_token, create_refresh_token  # 导入密码加密、校验和 JWT 创建函数
-from dao.user_dao import get_user_by_username, get_user_by_email, save_user,delete_refresh_tokens ,save_refresh_token ,delete_refresh_tokens,delete_refresh_token_by_token,get_user_by_id,get_refresh_token_by_token# 导入用户数据访问函数
+from dao.user_dao import get_user_by_username, get_user_by_email, save_user, delete_refresh_tokens, save_refresh_token, delete_refresh_token_by_token, get_user_by_id, get_refresh_token_by_token  # 导入用户数据访问函数
 from database.session import Session  # 导入数据库会话
 from schema.user import UserLogin, UserRegister, RefreshToken  # 导入 Pydantic 请求和响应模型
 from model.user import User  # 导入用户 ORM 模型
@@ -78,23 +78,35 @@ def get_user_info_by_username(db:Session,username:str):
         raise HTTPException(status_code=400,detail="用户名不存在")
     return user
 
-def refresh_access_token_by_refresh_token(db:Session,refresh_token:str):
+def refresh_access_token_by_refresh_token(db: Session, refresh_token: str):
     """
-    刷新 access token
+    刷新 access token 和 refresh token
     """
     # 先判断刷新token是否存在
-
-    refresh_token_model = get_refresh_token_by_token(db,refresh_token)
+    refresh_token_model = get_refresh_token_by_token(db, refresh_token)
     if not refresh_token_model:
-        raise HTTPException(status_code=400,detail="刷新 token不存在")
+        raise HTTPException(status_code=400, detail="刷新 token不存在")
     # 判断刷新token是否已经过期
     if refresh_token_model.expire_time < datetime.now():
-        raise HTTPException(status_code=400,detail="刷新 token 已过期")
+        raise HTTPException(status_code=400, detail="刷新 token 已过期")
     # 查询用户
-    user = get_user_by_id(db,refresh_token_model.user_id)
+    user = get_user_by_id(db, refresh_token_model.user_id)
     if not user:
-        raise HTTPException(status_code=400,detail="用户不存在")
-    # 生成新的访问token
-    new_access_token = create_access_token(user.username)
+        raise HTTPException(status_code=400, detail="用户不存在")
 
-    return new_access_token
+    # 删除旧的刷新令牌
+    delete_refresh_token_by_token(db, refresh_token)
+
+    # 生成新的访问令牌和刷新令牌
+    new_access_token = create_access_token(user.username)
+    new_refresh_token, expire_time = create_refresh_token(user.username)
+
+    # 存入新的刷新令牌
+    new_refresh_token_model = RefreshTokenModel(
+        user_id=user.id,
+        token=new_refresh_token,
+        expire_time=expire_time
+    )
+    save_refresh_token(db, new_refresh_token_model)
+
+    return new_access_token, new_refresh_token

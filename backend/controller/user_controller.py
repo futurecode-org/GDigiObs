@@ -1,5 +1,3 @@
-
-
 from database.session import Session, get_db  # 导入数据库会话和依赖注入函数
 from schema.user import TokenResponse, RefreshToken, UserLogin, UserRegister, UserResponse  # 导入 Pydantic 请求和响应模型
 from fastapi import APIRouter, Depends  # 导入 FastAPI 路由和依赖注入工具
@@ -9,23 +7,23 @@ from model.user import User  # 导入用户模型
 
 
 
-user_router = APIRouter(prefix="/user",tags=["user用户认证"])
+user_router = APIRouter(prefix="/user",tags=["User 用户认证"])
 @user_router.post("/register", response_model=UserResponse)
 def register(user:UserRegister,db:Session = Depends(get_db)):
     """
-    用户注册接口
+    用户注册接口<br>
     包含用户名、密码、邮箱等字段
     """
     new_user = register_user(db,user)
     return new_user
-   
+
 
 
 @user_router.post("/login", response_model=TokenResponse)
-def login(user:UserLogin,db:Session = Depends(get_db)):
+def login(user: UserLogin, db: Session = Depends(get_db)):
     """
-    用户登录接口
-    包含用户名、密码、邮箱等字段
+    用户登录接口<br>
+    包含用户名和密码字段
     """
     access_token,refresh_token = login_user(db,user)
     return TokenResponse(access_token=access_token,refresh_token=refresh_token)
@@ -35,7 +33,7 @@ def login(user:UserLogin,db:Session = Depends(get_db)):
 @user_router.post("/logout")
 def logout(refresh_token: RefreshToken, db: Session = Depends(get_db)):
     """
-    用户退出登录接口
+    用户退出登录接口<br>
     刷新 token 失效
     """
     # TODO: 实现 token 黑名单或删除 refresh token
@@ -43,24 +41,22 @@ def logout(refresh_token: RefreshToken, db: Session = Depends(get_db)):
     return {"message": "退出登录成功"}
 
 
-@user_router.get("/info/{username}",response_model=UserResponse)
-def get_user_info(username: str, db: Session = Depends(get_db)):
+@user_router.get("/info/{username}", response_model=UserResponse)
+def get_user_info(username: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    用户信息接口
-    根据用户名获取用户信息
+    用户信息接口<br>
+    根据用户名获取用户信息（需要认证）
     """
-    # TODO: 实现获取用户信息服务
-    return get_user_info_by_username(db,username)
+    return get_user_info_by_username(db, username)
 
-@user_router.post("/refresh",response_model=TokenResponse)
+@user_router.post("/refresh", response_model=TokenResponse)
 def refresh_access_token(refresh_token: RefreshToken, db: Session = Depends(get_db)):
     """
-    刷新 access token 接口
-    包含 refresh token 字段
-    刷新 access token 并返回新的 access token
+    刷新令牌接口<br>
+    使用 refresh token 刷新 access token 和 refresh token
     """
-    access_token = refresh_access_token_by_refresh_token(db, refresh_token.token)
-    return TokenResponse(access_token=access_token,refresh_token=refresh_token.token)
+    access_token, new_refresh_token = refresh_access_token_by_refresh_token(db, refresh_token.token)
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
    
 @user_router.get("/profile",response_model=UserResponse)
 def get_profile(current_user: User = Depends(get_current_user)):

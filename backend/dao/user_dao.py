@@ -1,8 +1,9 @@
-
+import logging
 from model.refresh_token import RefreshTokenModel
 from database.session import Session  # 导入数据库会话
 from model.user import User  # 导入用户模型
 
+logger = logging.getLogger(__name__)
 
 def get_user_by_username(db: Session, username: str):
     """
@@ -34,6 +35,7 @@ def save_user(db: Session, user: User):
         return user
     except Exception as e:
         db.rollback()
+        logger.error(f"保存用户失败: {e}")
         return None
 
 def delete_refresh_tokens(db: Session, user_id: int):
@@ -46,6 +48,7 @@ def delete_refresh_tokens(db: Session, user_id: int):
         return True
     except Exception as e:
         db.rollback()
+        logger.error(f"删除用户刷新令牌失败: {e}")
         return False
     
 def save_refresh_token(db: Session, refresh_token: RefreshTokenModel):
@@ -58,6 +61,7 @@ def save_refresh_token(db: Session, refresh_token: RefreshTokenModel):
         return refresh_token
     except Exception as e:
         db.rollback()
+        logger.error(f"保存刷新令牌失败: {e}")
         return None
 
 def delete_refresh_token_by_token(db: Session, token: str):
@@ -70,6 +74,7 @@ def delete_refresh_token_by_token(db: Session, token: str):
         return True
     except Exception as e:
         db.rollback()
+        logger.error(f"删除刷新令牌失败: {e}")
         return False
 
 def get_refresh_token_by_token(db: Session, token: str):
