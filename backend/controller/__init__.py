@@ -1,0 +1,5 @@
+# Controller层导入
+from controller.auth_controller import auth_router
+from controller.user_controller import user_router
+from controller.tenant_controller import tenant_router
+from controller.rbac_controller import rbac_router

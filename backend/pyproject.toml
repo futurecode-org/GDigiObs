@@ -14,6 +14,7 @@ dependencies = [
     "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.32",
     "sqlalchemy>=2.0.51",
+    "sqlparse>=0.5.5",
 ]
 
 [[tool.uv.index]]
