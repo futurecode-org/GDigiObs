@@ -1,0 +1,194 @@
+"""会话管理数据访问层"""
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, desc
+from typing import List, Optional
+from datetime import datetime
+
+from model.conversation import Conversation, ConversationMember, Message
+from model.user import User
+
+
+def get_or_create_direct_conversation(db: Session, user_id1: int, user_id2: int, tenant_id: int) -> Conversation:
+    """获取或创建单聊会话"""
+    # 查找现有单聊会话
+    existing = db.query(Conversation).join(ConversationMember, and_(
+        Conversation.id == ConversationMember.conversation_id,
+        ConversationMember.user_id.in_([user_id1, user_id2])
+    )).filter(
+        Conversation.tenant_id == tenant_id,
+        Conversation.type == "direct"
+    ).group_by(Conversation.id).having(
+        db.func.count(ConversationMember.user_id) == 2
+    ).first()
+    
+    if existing:
+        # 验证是否包含这两个用户
+        members = db.query(ConversationMember).filter(
+            ConversationMember.conversation_id == existing.id
+        ).all()
+        member_ids = [m.user_id for m in members]
+        if user_id1 in member_ids and user_id2 in member_ids:
+            return existing
+    
+    # 创建新会话
+    conversation = Conversation(
+        tenant_id=tenant_id,
+        type="direct"
+    )
+    db.add(conversation)
+    db.flush()
+    
+    # 添加成员
+    member1 = ConversationMember(
+        conversation_id=conversation.id,
+        user_id=user_id1
+    )
+    member2 = ConversationMember(
+        conversation_id=conversation.id,
+        user_id=user_id2
+    )
+    db.add_all([member1, member2])
+    db.commit()
+    
+    return conversation
+
+
+def get_user_conversations(db: Session, user_id: int) -> List[Conversation]:
+    """获取用户的所有会话"""
+    conversations = db.query(Conversation).join(ConversationMember).filter(
+        ConversationMember.user_id == user_id,
+        ConversationMember.hidden == False
+    ).order_by(desc(Conversation.last_message_at)).all()
+    return conversations
+
+
+def get_conversation_by_id(db: Session, conversation_id: int) -> Optional[Conversation]:
+    """获取会话详情"""
+    return db.query(Conversation).filter(Conversation.id == conversation_id).first()
+
+
+def get_conversation_members(db: Session, conversation_id: int) -> List[ConversationMember]:
+    """获取会话成员列表"""
+    return db.query(ConversationMember).filter(
+        ConversationMember.conversation_id == conversation_id
+    ).all()
+
+
+def is_conversation_member(db: Session, conversation_id: int, user_id: int) -> bool:
+    """检查用户是否是会话成员"""
+    member = db.query(ConversationMember).filter(
+        ConversationMember.conversation_id == conversation_id,
+        ConversationMember.user_id == user_id
+    ).first()
+    return member is not None
+
+
+def get_conversation_member(db: Session, conversation_id: int, user_id: int) -> Optional[ConversationMember]:
+    """获取用户在会话中的成员信息"""
+    return db.query(ConversationMember).filter(
+        ConversationMember.conversation_id == conversation_id,
+        ConversationMember.user_id == user_id
+    ).first()
+
+
+def update_conversation_last_message(db: Session, conversation_id: int, message_id: int):
+    """更新会话最近消息"""
+    conversation = get_conversation_by_id(db, conversation_id)
+    if conversation:
+        conversation.last_message_id = message_id
+        conversation.last_message_at = datetime.now()
+        db.commit()
+
+
+def create_message(db: Session, tenant_id: int, conversation_id: int, sender_id: int,
+                   message_type: str, content: str = None, file_id: int = None) -> Message:
+    """创建消息"""
+    message = Message(
+        tenant_id=tenant_id,
+        conversation_id=conversation_id,
+        sender_id=sender_id,
+        message_type=message_type,
+        content=content,
+        file_id=file_id
+    )
+    db.add(message)
+    db.flush()
+    
+    # 更新会话最近消息
+    update_conversation_last_message(db, conversation_id, message.id)
+    
+    # 增加其他成员未读数
+    members = get_conversation_members(db, conversation_id)
+    for member in members:
+        if member.user_id != sender_id:
+            member.unread_count += 1
+    
+    db.commit()
+    return message
+
+
+def get_conversation_messages(db: Session, conversation_id: int, page: int = 1, 
+                              page_size: int = 50) -> List[Message]:
+    """获取会话消息列表"""
+    messages = db.query(Message).filter(
+        Message.conversation_id == conversation_id,
+        Message.recalled_at == None
+    ).order_by(desc(Message.created_at)).offset((page - 1) * page_size).limit(page_size).all()
+    return messages
+
+
+def mark_messages_as_read(db: Session, conversation_id: int, user_id: int):
+    """标记消息为已读"""
+    member = get_conversation_member(db, conversation_id, user_id)
+    if member:
+        # 获取会话最近消息
+        conversation = get_conversation_by_id(db, conversation_id)
+        if conversation and conversation.last_message_id:
+            member.last_read_message_id = conversation.last_message_id
+            member.unread_count = 0
+            db.commit()
+
+
+def recall_message(db: Session, message_id: int, user_id: int) -> bool:
+    """撤回消息"""
+    message = db.query(Message).filter(
+        Message.id == message_id,
+        Message.sender_id == user_id,
+        Message.recalled_at == None
+    ).first()
+    
+    if not message:
+        return False
+    
+    # 检查是否在撤回时间限制内（2分钟）
+    time_diff = datetime.now() - message.created_at
+    if time_diff.total_seconds() > 120:
+        return False
+    
+    message.recalled_at = datetime.now()
+    db.commit()
+    return True
+
+
+def hide_conversation(db: Session, conversation_id: int, user_id: int):
+    """隐藏会话"""
+    member = get_conversation_member(db, conversation_id, user_id)
+    if member:
+        member.hidden = True
+        db.commit()
+
+
+def pin_conversation(db: Session, conversation_id: int, user_id: int, pinned: bool):
+    """置顶会话"""
+    member = get_conversation_member(db, conversation_id, user_id)
+    if member:
+        member.pinned = pinned
+        db.commit()
+
+
+def mute_conversation(db: Session, conversation_id: int, user_id: int, muted: bool):
+    """设置会话免打扰"""
+    member = get_conversation_member(db, conversation_id, user_id)
+    if member:
+        member.muted = muted
+        db.commit()
