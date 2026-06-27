@@ -1,4 +1,9 @@
 import { PlaceholderPage } from "@/shared/components/PlaceholderPage"
+import { UserManagement } from "./UserManagement"
+
+export { PlaceholderPage }
+
+export { UserManagement }
 
 export function TenantManagement() {
   return <PlaceholderPage title="租户管理" />
@@ -6,10 +11,6 @@ export function TenantManagement() {
 
 export function OrgStructure() {
   return <PlaceholderPage title="组织架构" />
-}
-
-export function UserManagement() {
-  return <PlaceholderPage title="用户管理" />
 }
 
 export function RoleManagement() {

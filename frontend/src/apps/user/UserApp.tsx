@@ -36,7 +36,7 @@ interface UserAppProps {
   onSwitch?: () => void
 }
 
-export function UserApp({ onSwitch }: UserAppProps) {
+export function UserApp({}: UserAppProps) {
   const [currentPage, setCurrentPage] = useState<UserPage>("dashboard")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -63,8 +63,7 @@ export function UserApp({ onSwitch }: UserAppProps) {
     <div className="h-screen flex flex-col bg-background">
       <TopBar
         title={pageTitles[currentPage]}
-        onSwitch={onSwitch}
-        notificationCount={3}
+        onNotificationClick={() => setCurrentPage("notifications")}
       />
       <div className="flex-1 flex overflow-hidden">
         <UserSidebar

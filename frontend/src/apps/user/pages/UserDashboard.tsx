@@ -1,16 +1,78 @@
-import { MessageSquare, Search, BookOpen, Wand2 } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts"
-import { StatCard } from "@/shared/components/StatCard"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
-import { SectionHeader } from "@/shared/components/SectionHeader"
-import { activityData, sentimentData, contacts, myTasks, queryExamples } from "@/lib/mockData"
+import { useState, useEffect } from "react";
+import { MessageSquare, Search, BookOpen, Wand2 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { StatCard } from "@/shared/components/StatCard";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { SectionHeader } from "@/shared/components/SectionHeader";
+import { conversationApi, workflowApi } from "../../../lib/api";
+import type { Conversation, Task } from "../../../lib/types";
+import { queryExamples } from "../../../lib/mockData";
 
 export function UserDashboard() {
+  const [stats, setStats] = useState({ messages: 0, queries: 0, knowledge: 0, skills: 0 });
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    try {
+      const [convResult, taskResult] = await Promise.all([
+        conversationApi.getList(),
+        workflowApi.getTasks({ page: 1, page_size: 10 })
+      ]);
+
+      const convList = convResult as Conversation[];
+      setConversations(convList.slice(0, 4));
+
+      const taskList = (taskResult as { items: Task[] }).items || [];
+      setTasks(taskList.filter(t => t.status !== "completed").slice(0, 3));
+
+      const totalMessages = convList.reduce((sum, c) => sum + (c.message_count || 0), 0);
+      setStats({
+        messages: totalMessages,
+        queries: 45,
+        knowledge: 23,
+        skills: 89
+      });
+    } catch {
+      setConversations([]);
+      setTasks([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const activityData = [
+    { date: "周一", messages: 120, queries: 35, tasks: 12 },
+    { date: "周二", messages: 150, queries: 42, tasks: 15 },
+    { date: "周三", messages: 130, queries: 38, tasks: 10 },
+    { date: "周四", messages: 180, queries: 52, tasks: 18 },
+    { date: "周五", messages: 160, queries: 48, tasks: 14 },
+    { date: "周六", messages: 90, queries: 25, tasks: 8 },
+    { date: "周日", messages: 80, queries: 22, tasks: 6 },
+  ];
+
+  const sentimentData = [
+    { name: "正面", value: 55, color: "#10B981" },
+    { name: "中性", value: 30, color: "#6B7280" },
+    { name: "负面", value: 15, color: "#EF4444" },
+  ];
+
+  const getConversationName = (conv: Conversation) => {
+    if (conv.type === "group" && conv.name) return conv.name;
+    return conv.members?.[0]?.nickname || conv.members?.[0]?.username || "未知";
+  };
+
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="我的消息" value="128" icon={MessageSquare} trend={5.2} color="primary" />
+        <StatCard label="我的消息" value={stats.messages.toString()} icon={MessageSquare} trend={5.2} color="primary" />
         <StatCard label="智能问数" value="45" icon={Search} trend={12.3} color="info" />
         <StatCard label="知识库检索" value="23" icon={BookOpen} trend={-3.1} color="purple" />
         <StatCard label="技能调用" value="89" icon={Wand2} trend={8.7} color="success" />
@@ -72,50 +134,85 @@ export function UserDashboard() {
         <Card>
           <CardContent className="p-4">
             <SectionHeader title="最近联系人" action={<button className="text-xs text-primary hover:underline">查看全部 →</button>} />
-            <div className="space-y-2">
-              {contacts.slice(0, 4).map(c => (
-                <div key={c.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className="relative">
-                    <div className="w-10 h-10 rounded-full bg-cyan-500/15 text-cyan-400 text-sm font-semibold flex items-center justify-center">
-                      {c.name[0]}
+            {isLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="flex items-center gap-3 p-2">
+                    <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
+                    <div className="flex-1 space-y-1">
+                      <div className="h-4 w-1/2 bg-muted animate-pulse rounded" />
+                      <div className="h-3 w-3/4 bg-muted animate-pulse rounded" />
                     </div>
-                    {c.online && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-card" />}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{c.name}</span>
-                      {c.online && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {conversations.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">暂无联系人</p>
+                ) : (
+                  conversations.map(c => (
+                    <div key={c.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-full bg-cyan-500/15 text-cyan-400 text-sm font-semibold flex items-center justify-center">
+                          {getConversationName(c).charAt(0)}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">{getConversationName(c)}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{c.last_message?.content || "暂无消息"}</p>
+                      </div>
+                      {c.unread_count > 0 && <Badge variant="destructive">{c.unread_count}</Badge>}
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">{c.lastMsg}</p>
-                  </div>
-                  {(c.unread ?? 0) > 0 && <Badge variant="destructive">{c.unread}</Badge>}
-                </div>
-              ))}
-            </div>
+                  ))
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
             <SectionHeader title="待处理任务" action={<button className="text-xs text-primary hover:underline">查看全部 →</button>} />
-            <div className="space-y-3 mt-2">
-              {myTasks.filter(t => t.status !== "success").slice(0, 3).map(t => (
-                <div key={t.id} className="p-2 rounded-lg bg-muted/30">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-foreground truncate">{t.title}</span>
-                    <Badge variant={t.status === "running" ? "outline" : "secondary"}>
-                      {t.status === "running" ? "进行中" : "待处理"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-primary rounded-full" style={{ width: `${t.progress}%` }} />
+            {isLoading ? (
+              <div className="space-y-3 mt-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="p-2 rounded-lg bg-muted/30">
+                    <div className="h-4 w-1/2 bg-muted animate-pulse rounded mb-1.5" />
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "50%" }} />
+                      </div>
                     </div>
-                    <span className="text-[10px] text-muted-foreground">{t.progress}%</span>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3 mt-2">
+                {tasks.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center">暂无任务</p>
+                ) : (
+                  tasks.map(t => (
+                    <div key={t.id} className="p-2 rounded-lg bg-muted/30">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-foreground truncate">{t.name || "任务"}</span>
+                        <Badge variant={t.status === "running" ? "outline" : "secondary"}>
+                          {t.status === "running" ? "进行中" : "待处理"}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-primary rounded-full" style={{ width: `${(t.progress || 0)}%` }} />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{t.progress || 0}%</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -139,5 +236,5 @@ export function UserDashboard() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

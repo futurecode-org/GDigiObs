@@ -1,33 +1,74 @@
-import { useState } from "react"
-import { Bell, Check, CheckCheck, Trash2, Search } from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { SectionHeader } from "@/shared/components/SectionHeader"
-import { myNotifications } from "@/lib/mockData"
-import { cn } from "@/lib/utils"
+import { useState, useEffect } from "react";
+import { Bell, Check, CheckCheck, Trash2, Search } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { SectionHeader } from "@/shared/components/SectionHeader";
+import { notificationApi } from "../../../lib/api";
+import type { Notification } from "../../../lib/types";
+import { cn } from "@/lib/utils";
 
 export function NotificationsPage() {
-  const [filter, setFilter] = useState<"all" | "unread">("all")
-  const [notifications, setNotifications] = useState(myNotifications)
+  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [page] = useState(1);
 
-  const filteredNotifs = filter === "all" ? notifications : notifications.filter(n => !n.read)
-  const unreadCount = notifications.filter(n => !n.read).length
+  useEffect(() => {
+    fetchNotifications();
+  }, [page]);
 
-  const markAsRead = (id: number) => {
-    setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n))
-  }
+  const fetchNotifications = async () => {
+    setIsLoading(true);
+    try {
+      const result = await notificationApi.getList({ page, page_size: 50 });
+      setNotifications(result.items as Notification[]);
+    } catch {
+      setNotifications([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const markAllRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })))
-  }
+  const filteredNotifs = filter === "all" ? notifications : notifications.filter(n => !n.read);
+  const unreadCount = notifications.filter(n => !n.read).length;
 
-  const deleteNotification = (id: number) => {
-    setNotifications(notifications.filter(n => n.id !== id))
-  }
+  const markAsRead = async (id: number) => {
+    try {
+      await notificationApi.markAsRead(id);
+      setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch {}
+  };
 
-  const typeLabels: Record<string, string> = { system: "系统", task: "任务", message: "消息", approval: "审批" }
-  const typeColors: Record<string, string> = { system: "secondary", task: "default", message: "outline", approval: "outline" }
+  const markAllRead = async () => {
+    try {
+      await notificationApi.markAllAsRead();
+      setNotifications(notifications.map(n => ({ ...n, read: true })));
+    } catch {}
+  };
+
+  const deleteNotification = async (id: number) => {
+    try {
+      await notificationApi.delete(id);
+      setNotifications(notifications.filter(n => n.id !== id));
+    } catch {}
+  };
+
+  const typeLabels: Record<string, string> = { system: "系统", task: "任务", message: "消息", approval: "审批" };
+  const typeColors: Record<string, string> = { system: "secondary", task: "default", message: "outline", approval: "outline" };
+
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (hours < 1) return "刚刚";
+    if (hours < 24) return `${hours}小时前`;
+    if (days < 7) return `${days}天前`;
+    return date.toLocaleDateString();
+  };
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-4">
@@ -67,42 +108,68 @@ export function NotificationsPage() {
         </CardContent>
       </Card>
 
-      <div className="space-y-2">
-        {filteredNotifs.map(notif => (
-          <Card key={notif.id} className={cn("transition-colors", !notif.read && "bg-primary/5")}>
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", notif.read ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
-                  <Bell className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-foreground">{notif.title}</span>
-                    <Badge variant={typeColors[notif.type] as "default" | "secondary" | "outline" | "destructive" | "ghost"} className="text-[10px]">
-                      {typeLabels[notif.type]}
-                    </Badge>
-                    {!notif.read && <span className="w-2 h-2 rounded-full bg-primary" />}
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => (
+            <Card key={i} className="p-4">
+              <CardContent>
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-muted animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-1/2 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-3/4 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-1/3 bg-muted animate-pulse rounded" />
                   </div>
-                  <p className="text-xs text-muted-foreground mb-2">{notif.content}</p>
-                  <div className="flex items-center gap-4">
-                    <span className="text-[10px] text-muted-foreground">{notif.time}</span>
-                    <div className="flex gap-3 ml-auto">
-                      {!notif.read && (
-                        <button onClick={() => markAsRead(notif.id)} className="text-[10px] text-primary hover:underline flex items-center gap-1">
-                          <Check className="w-3 h-3" /> 标记已读
-                        </button>
-                      )}
-                      <button onClick={() => deleteNotification(notif.id)} className="text-[10px] text-red-400 hover:underline flex items-center gap-1">
-                        <Trash2 className="w-3 h-3" /> 删除
-                      </button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredNotifs.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Bell className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>暂无通知</p>
+            </div>
+          ) : (
+            filteredNotifs.map(notif => (
+              <Card key={notif.id} className={cn("transition-colors", !notif.read && "bg-primary/5")}>
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", notif.read ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-foreground">{notif.title}</span>
+                        <Badge variant={typeColors[notif.type] as "default" | "secondary" | "outline" | "destructive" | "ghost"} className="text-[10px]">
+                          {typeLabels[notif.type]}
+                        </Badge>
+                        {!notif.read && <span className="w-2 h-2 rounded-full bg-primary" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-2">{notif.content}</p>
+                      <div className="flex items-center gap-4">
+                        <span className="text-[10px] text-muted-foreground">{formatTime(notif.created_at)}</span>
+                        <div className="flex gap-3 ml-auto">
+                          {!notif.read && (
+                            <button onClick={() => markAsRead(notif.id)} className="text-[10px] text-primary hover:underline flex items-center gap-1">
+                              <Check className="w-3 h-3" /> 标记已读
+                            </button>
+                          )}
+                          <button onClick={() => deleteNotification(notif.id)} className="text-[10px] text-red-400 hover:underline flex items-center gap-1">
+                            <Trash2 className="w-3 h-3" /> 删除
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
     </div>
-  )
+  );
 }
