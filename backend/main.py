@@ -23,6 +23,7 @@ from controller.audit_controller import audit_router, ask_router
 from controller.dify_controller import dify_router, assistant_router
 from core.exceptions import BusinessException, business_exception_handler, http_exception_handler
 from core.response import ApiResponse
+from core.config import settings
 from service.auth_service import init_system
 
 
@@ -53,13 +54,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS配置
+# CORS 配置 - 从环境变量读取
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应配置具体域名
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_allow_origins_list,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.cors_allow_methods_list,
+    allow_headers=settings.cors_allow_headers_list,
 )
 
 # 注册异常处理器
@@ -111,4 +112,4 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=settings.UVICORN_HOST, port=settings.UVICORN_PORT)
