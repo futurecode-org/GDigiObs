@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from database.session import get_db
 from schema.user import UserResponse, UserUpdate, UserCreate, UserListResponse, AssignRoleRequest
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext
 from service.user_service import get_user_list, get_user_detail, update_user_profile, assign_roles_to_user, disable_user, ban_user
 
 from model.user import User

@@ -8,7 +8,7 @@ from schema.agent import (
     AgentRunCreate, AgentListResponse
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.agent_service import (
     get_agents_service, get_agent_detail_service, create_agent_service,
     update_agent_service, delete_agent_service, run_agent_service,
@@ -26,10 +26,9 @@ def list_agents(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取数字员工列表"""
-    ctx = get_request_context(current_user)
     result = get_agents_service(db, ctx, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -44,10 +43,9 @@ def list_agents(
 def get_agent(
     agent_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取数字员工详情"""
-    ctx = get_request_context(current_user)
     result = get_agent_detail_service(db, ctx, agent_id)
     return ApiResponse.success(data=result)
 
@@ -56,10 +54,9 @@ def get_agent(
 def create_agent(
     data: AgentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """创建数字员工"""
-    ctx = get_request_context(current_user)
     result = create_agent_service(
         db, ctx, data.name,
         avatar_file_id=data.avatar_file_id,
@@ -81,10 +78,9 @@ def update_agent(
     agent_id: int,
     data: AgentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新数字员工"""
-    ctx = get_request_context(current_user)
     result = update_agent_service(db, ctx, agent_id, **data.model_dump(exclude_unset=True))
     return ApiResponse.success(data=result)
 
@@ -93,10 +89,9 @@ def update_agent(
 def delete_agent(
     agent_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除数字员工"""
-    ctx = get_request_context(current_user)
     delete_agent_service(db, ctx, agent_id)
     return ApiResponse.success(message="数字员工已删除")
 
@@ -106,10 +101,9 @@ def run_agent(
     agent_id: int,
     data: AgentRunCreate = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """执行数字员工"""
-    ctx = get_request_context(current_user)
     input_data = data.input_data if data else None
     result = run_agent_service(db, ctx, agent_id, input_data)
     return ApiResponse.success(data=result)
@@ -121,10 +115,9 @@ def list_agent_runs(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取数字员工执行记录列表"""
-    ctx = get_request_context(current_user)
     result = get_agent_runs_service(db, ctx, agent_id, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -139,9 +132,8 @@ def list_agent_runs(
 def get_agent_run(
     run_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取执行记录详情"""
-    ctx = get_request_context(current_user)
     result = get_agent_run_detail_service(db, ctx, run_id)
     return ApiResponse.success(data=result)

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from database.session import get_db
 from schema.auth import UserRegister, UserLogin, TokenResponse, RefreshTokenRequest, CurrentUserResponse, LogoutRequest
 from core.response import ApiResponse
-from core.dependencies import get_current_user, get_request_context
+from core.dependencies import get_current_user, get_request_context, RequestContext
 from service.auth_service import register_user, login_user, refresh_token, logout_user, get_current_user_info
 
 from model.user import User

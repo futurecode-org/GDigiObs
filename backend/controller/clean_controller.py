@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from database.session import get_db
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, get_request_context
+from core.dependencies import get_current_user, get_request_context, RequestContext
 from service.clean_service import (
     get_rules_service, get_rule_detail_service, create_rule_service,
     update_rule_service, delete_rule_service, execute_clean_service,
@@ -22,10 +22,9 @@ def list_rules(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取清洗规则列表"""
-    ctx = get_request_context(current_user)
     result = get_rules_service(db, ctx, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -40,10 +39,9 @@ def list_rules(
 def get_rule(
     rule_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取清洗规则详情"""
-    ctx = get_request_context(current_user)
     result = get_rule_detail_service(db, ctx, rule_id)
     return ApiResponse.success(data=result)
 
@@ -56,10 +54,9 @@ def create_rule(
     description: str = None,
     task_ids: list = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """创建清洗规则"""
-    ctx = get_request_context(current_user)
     result = create_rule_service(
         db, ctx, name, rule_type, config,
         description=description,
@@ -77,10 +74,9 @@ def update_rule(
     description: str = None,
     task_ids: list = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新清洗规则"""
-    ctx = get_request_context(current_user)
     update_data = {}
     if name is not None:
         update_data["name"] = name
@@ -101,10 +97,9 @@ def update_rule(
 def delete_rule(
     rule_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除清洗规则"""
-    ctx = get_request_context(current_user)
     delete_rule_service(db, ctx, rule_id)
     return ApiResponse.success(message="清洗规则已删除")
 
@@ -114,10 +109,9 @@ def execute_clean(
     rule_id: int,
     task_id: int = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """执行清洗规则"""
-    ctx = get_request_context(current_user)
     result = execute_clean_service(db, ctx, rule_id, task_id)
     return ApiResponse.success(data=result)
 
@@ -128,10 +122,9 @@ def list_logs(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取清洗日志"""
-    ctx = get_request_context(current_user)
     result = get_logs_service(db, ctx, rule_id, page, page_size)
     paginated = PaginatedData(
         items=result,

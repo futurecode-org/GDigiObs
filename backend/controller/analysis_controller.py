@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from database.session import get_db
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, get_request_context
+from core.dependencies import get_current_user, get_request_context, RequestContext
 from service.analysis_service import (
     get_tasks_service, get_task_detail_service, create_task_service,
     update_task_service, delete_task_service, execute_analysis_service,
@@ -23,10 +23,9 @@ def list_tasks(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取分析任务列表"""
-    ctx = get_request_context(current_user)
     result = get_tasks_service(db, ctx, analysis_type, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -41,10 +40,9 @@ def list_tasks(
 def get_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取分析任务详情"""
-    ctx = get_request_context(current_user)
     result = get_task_detail_service(db, ctx, task_id)
     return ApiResponse.success(data=result)
 
@@ -57,10 +55,9 @@ def create_task(
     config: dict = None,
     description: str = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """创建分析任务"""
-    ctx = get_request_context(current_user)
     result = create_task_service(
         db, ctx, name, analysis_type, data_source, config,
         description=description
@@ -77,10 +74,9 @@ def update_task(
     config: dict = None,
     description: str = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新分析任务"""
-    ctx = get_request_context(current_user)
     update_data = {}
     if name is not None:
         update_data["name"] = name
@@ -101,10 +97,9 @@ def update_task(
 def delete_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除分析任务"""
-    ctx = get_request_context(current_user)
     delete_task_service(db, ctx, task_id)
     return ApiResponse.success(message="分析任务已删除")
 
@@ -113,10 +108,9 @@ def delete_task(
 def execute_analysis(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """执行分析任务"""
-    ctx = get_request_context(current_user)
     result = execute_analysis_service(db, ctx, task_id)
     return ApiResponse.success(data=result)
 
@@ -127,10 +121,9 @@ def list_logs(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取分析日志"""
-    ctx = get_request_context(current_user)
     result = get_logs_service(db, ctx, task_id, page, page_size)
     paginated = PaginatedData(
         items=result,

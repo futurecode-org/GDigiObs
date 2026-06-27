@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from database.session import get_db
 from schema.file import FileAssetResponse, FileAssetListResponse
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.file_service import (
     get_files_service, get_file_detail_service, upload_file_service, delete_file_service
 )
@@ -23,10 +23,9 @@ def list_files(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取文件列表"""
-    ctx = get_request_context(current_user)
     result = get_files_service(db, ctx, file_type, usage_type, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -41,10 +40,9 @@ def list_files(
 def get_file(
     file_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取文件详情"""
-    ctx = get_request_context(current_user)
     result = get_file_detail_service(db, ctx, file_id)
     return ApiResponse.success(data=result)
 
@@ -54,10 +52,9 @@ def upload_file(
     file: UploadFile = File(...),
     usage_type: str = "general",
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """上传文件"""
-    ctx = get_request_context(current_user)
     result = upload_file_service(db, ctx, file, usage_type)
     return ApiResponse.success(data=result)
 
@@ -66,9 +63,8 @@ def upload_file(
 def delete_file(
     file_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除文件"""
-    ctx = get_request_context(current_user)
     delete_file_service(db, ctx, file_id)
     return ApiResponse.success(message="文件已删除")

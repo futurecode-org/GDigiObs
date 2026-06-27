@@ -9,7 +9,7 @@ from schema.knowledge import (
     KnowledgeBaseListResponse, KnowledgeFileListResponse
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.knowledge_service import (
     get_kbs_service, get_kb_detail_service, create_kb_service,
     update_kb_service, delete_kb_service,
@@ -29,10 +29,9 @@ def list_kbs(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取知识库列表"""
-    ctx = get_request_context(current_user)
     result = get_kbs_service(db, ctx, kb_type, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -47,10 +46,9 @@ def list_kbs(
 def get_kb(
     kb_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取知识库详情"""
-    ctx = get_request_context(current_user)
     result = get_kb_detail_service(db, ctx, kb_id)
     return ApiResponse.success(data=result)
 
@@ -59,10 +57,9 @@ def get_kb(
 def create_kb(
     data: KnowledgeBaseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """创建知识库"""
-    ctx = get_request_context(current_user)
     result = create_kb_service(
         db, ctx, data.name, data.type,
         description=data.description,
@@ -77,10 +74,9 @@ def update_kb(
     kb_id: int,
     data: KnowledgeBaseUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新知识库信息"""
-    ctx = get_request_context(current_user)
     result = update_kb_service(db, ctx, kb_id, **data.model_dump(exclude_unset=True))
     return ApiResponse.success(data=result)
 
@@ -89,10 +85,9 @@ def update_kb(
 def delete_kb(
     kb_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除知识库"""
-    ctx = get_request_context(current_user)
     delete_kb_service(db, ctx, kb_id)
     return ApiResponse.success(message="知识库已删除")
 
@@ -104,10 +99,9 @@ def list_files(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取知识文件列表"""
-    ctx = get_request_context(current_user)
     result = get_files_service(db, ctx, kb_id, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -123,10 +117,9 @@ def add_file(
     kb_id: int,
     data: KnowledgeFileCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """添加知识文件"""
-    ctx = get_request_context(current_user)
     result = add_file_service(db, ctx, kb_id, data.file_id)
     return ApiResponse.success(data=result)
 
@@ -136,10 +129,9 @@ def delete_file(
     kb_id: int,
     file_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除知识文件"""
-    ctx = get_request_context(current_user)
     delete_file_service(db, ctx, kb_id, file_id)
     return ApiResponse.success(message="文件已删除")
 
@@ -151,9 +143,8 @@ def list_chunks(
     page: int = 1,
     page_size: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取知识分片列表"""
-    ctx = get_request_context(current_user)
     result = get_chunks_service(db, ctx, kb_id, file_id, page, page_size)
     return ApiResponse.success(data=result)

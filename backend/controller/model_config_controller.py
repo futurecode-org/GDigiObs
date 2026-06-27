@@ -8,7 +8,7 @@ from schema.model_config import (
     ModelConfigListResponse
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.model_config_service import (
     get_models_service, get_model_detail_service, create_model_service,
     update_model_service, delete_model_service, get_platform_models_service,
@@ -27,10 +27,9 @@ def list_models(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取模型配置列表"""
-    ctx = get_request_context(current_user)
     result = get_models_service(db, ctx, model_type, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -51,10 +50,9 @@ def list_platform_models(db: Session = Depends(get_db)):
 @model_router.get("/embedding", summary="获取可用Embedding模型")
 def list_embedding_models(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取可用的Embedding模型"""
-    ctx = get_request_context(current_user)
     result = get_available_embedding_models(db, ctx)
     return ApiResponse.success(data=result)
 
@@ -63,10 +61,9 @@ def list_embedding_models(
 def get_model(
     model_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取模型配置详情"""
-    ctx = get_request_context(current_user)
     result = get_model_detail_service(db, ctx, model_id)
     return ApiResponse.success(data=result)
 
@@ -96,10 +93,9 @@ def update_model(
     model_id: int,
     data: ModelConfigUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新模型配置"""
-    ctx = get_request_context(current_user)
     result = update_model_service(db, ctx, model_id, **data.model_dump(exclude_unset=True))
     return ApiResponse.success(data=result)
 
@@ -108,10 +104,9 @@ def update_model(
 def delete_model(
     model_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除模型配置"""
-    ctx = get_request_context(current_user)
     delete_model_service(db, ctx, model_id)
     return ApiResponse.success(message="模型配置已删除")
 

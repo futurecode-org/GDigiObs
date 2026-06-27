@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from database.session import get_db
 from schema.skill import SkillCreate, SkillUpdate, SkillResponse, SkillListResponse
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.skill_service import (
     get_skills_service, get_skill_detail_service, create_skill_service,
     update_skill_service, delete_skill_service, approve_skill_service, reject_skill_service
@@ -23,10 +23,9 @@ def list_skills(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取技能列表"""
-    ctx = get_request_context(current_user)
     result = get_skills_service(db, ctx, skill_type, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -41,10 +40,9 @@ def list_skills(
 def get_skill(
     skill_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取技能详情"""
-    ctx = get_request_context(current_user)
     result = get_skill_detail_service(db, ctx, skill_id)
     return ApiResponse.success(data=result)
 
@@ -53,10 +51,9 @@ def get_skill(
 def create_skill(
     data: SkillCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """创建技能"""
-    ctx = get_request_context(current_user)
     result = create_skill_service(
         db, ctx, data.name, data.type,
         description=data.description,
@@ -73,10 +70,9 @@ def update_skill(
     skill_id: int,
     data: SkillUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新技能"""
-    ctx = get_request_context(current_user)
     result = update_skill_service(db, ctx, skill_id, **data.model_dump(exclude_unset=True))
     return ApiResponse.success(data=result)
 
@@ -85,10 +81,9 @@ def update_skill(
 def delete_skill(
     skill_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除技能"""
-    ctx = get_request_context(current_user)
     delete_skill_service(db, ctx, skill_id)
     return ApiResponse.success(message="技能已删除")
 

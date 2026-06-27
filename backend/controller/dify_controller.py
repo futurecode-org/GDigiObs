@@ -6,7 +6,7 @@ from typing import Optional, List, Dict
 import json
 
 from database.session import get_db
-from core.dependencies import get_current_user, get_request_context
+from core.dependencies import get_current_user, get_request_context, RequestContext
 from core.response import ApiResponse
 from schema.dify import (
     DifyProviderCreate, DifyProviderUpdate, DifyProviderResponse,
@@ -36,7 +36,6 @@ def get_providers(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     result = get_providers_service(db, ctx, page, page_size)
     return ApiResponse.success(data=result)
 
@@ -47,7 +46,6 @@ def create_provider(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     provider = create_provider_service(db, ctx, data.dict())
     return ApiResponse.success(data=DifyProviderResponse.from_orm(provider))
 
@@ -58,7 +56,6 @@ def get_provider(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     provider = get_provider_service(db, ctx, provider_id)
     return ApiResponse.success(data=DifyProviderResponse.from_orm(provider))
 
@@ -70,7 +67,6 @@ def update_provider(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     provider = update_provider_service(db, ctx, provider_id, data.dict(exclude_unset=True))
     return ApiResponse.success(data=DifyProviderResponse.from_orm(provider))
 
@@ -81,7 +77,6 @@ def delete_provider(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     delete_provider_service(db, ctx, provider_id)
     return ApiResponse.success(message="删除成功")
 
@@ -92,7 +87,6 @@ async def test_provider(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     result = await test_provider_service(db, ctx, provider_id)
     return ApiResponse.success(data=result)
 
@@ -105,7 +99,6 @@ def get_apps(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     result = get_apps_service(db, ctx, app_type, page, page_size)
     return ApiResponse.success(data=result)
 
@@ -116,7 +109,6 @@ def create_app(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     app = create_app_service(db, ctx, data.dict())
     return ApiResponse.success(data=DifyAppResponse.from_orm(app))
 
@@ -127,7 +119,6 @@ def get_app(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     app = get_app_service(db, ctx, app_id)
     return ApiResponse.success(data=DifyAppResponse.from_orm(app))
 
@@ -139,7 +130,6 @@ def update_app(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     app = update_app_service(db, ctx, app_id, data.dict(exclude_unset=True))
     return ApiResponse.success(data=DifyAppResponse.from_orm(app))
 
@@ -150,7 +140,6 @@ def delete_app(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     delete_app_service(db, ctx, app_id)
     return ApiResponse.success(message="删除成功")
 
@@ -161,7 +150,6 @@ async def test_app(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     result = await test_app_service(db, ctx, app_id)
     return ApiResponse.success(data=result)
 
@@ -173,7 +161,6 @@ async def invoke_app(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     result = await invoke_app_service(
         db, ctx, app_id,
         data.inputs, data.query, data.conversation_id,
@@ -189,7 +176,6 @@ async def stream_invoke_app(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     
     async def event_generator():
         async for event in stream_invoke_app_service(
@@ -211,7 +197,6 @@ def get_call_logs(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     result = get_call_logs_service(db, ctx, dify_app_id, call_scene, page, page_size)
     return ApiResponse.success(data=result)
 
@@ -223,7 +208,6 @@ def get_assistants(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     result = get_assistants_service(db, ctx, page, page_size)
     return ApiResponse.success(data=result)
 
@@ -234,7 +218,6 @@ def create_assistant(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     assistant = create_assistant_service(db, ctx, data.dict())
     return ApiResponse.success(data=ChatAssistantResponse.from_orm(assistant))
 
@@ -245,7 +228,6 @@ def get_assistant(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     assistant = get_assistant_service(db, ctx, assistant_id)
     return ApiResponse.success(data=ChatAssistantResponse.from_orm(assistant))
 
@@ -257,7 +239,6 @@ def update_assistant(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     assistant = update_assistant_service(db, ctx, assistant_id, data.dict(exclude_unset=True))
     return ApiResponse.success(data=ChatAssistantResponse.from_orm(assistant))
 
@@ -268,7 +249,6 @@ def delete_assistant(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     delete_assistant_service(db, ctx, assistant_id)
     return ApiResponse.success(message="删除成功")
 
@@ -280,7 +260,6 @@ async def chat_with_assistant(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    ctx = get_request_context(current_user)
     result = await chat_with_assistant_service(
         db, ctx, assistant_id, data.message, data.conversation_id, data.files
     )

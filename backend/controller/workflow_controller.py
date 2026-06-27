@@ -8,7 +8,7 @@ from schema.workflow import (
     WorkflowRunCreate, WorkflowListResponse
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.workflow_service import (
     get_workflows_service, get_workflow_detail_service, create_workflow_service,
     update_workflow_service, delete_workflow_service, enable_workflow_service,
@@ -28,10 +28,9 @@ def list_workflows(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取工作流列表"""
-    ctx = get_request_context(current_user)
     result = get_workflows_service(db, ctx, status, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -46,10 +45,9 @@ def list_workflows(
 def get_workflow(
     workflow_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取工作流详情"""
-    ctx = get_request_context(current_user)
     result = get_workflow_detail_service(db, ctx, workflow_id)
     return ApiResponse.success(data=result)
 
@@ -58,10 +56,9 @@ def get_workflow(
 def create_workflow(
     data: WorkflowCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """创建工作流"""
-    ctx = get_request_context(current_user)
     result = create_workflow_service(
         db, ctx, data.name, data.nodes, data.edges,
         description=data.description,
@@ -76,10 +73,9 @@ def update_workflow(
     workflow_id: int,
     data: WorkflowUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新工作流"""
-    ctx = get_request_context(current_user)
     result = update_workflow_service(db, ctx, workflow_id, **data.model_dump(exclude_unset=True))
     return ApiResponse.success(data=result)
 
@@ -88,10 +84,9 @@ def update_workflow(
 def delete_workflow(
     workflow_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除工作流"""
-    ctx = get_request_context(current_user)
     delete_workflow_service(db, ctx, workflow_id)
     return ApiResponse.success(message="工作流已删除")
 
@@ -100,10 +95,9 @@ def delete_workflow(
 def enable_workflow(
     workflow_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """启用工作流"""
-    ctx = get_request_context(current_user)
     enable_workflow_service(db, ctx, workflow_id)
     return ApiResponse.success(message="工作流已启用")
 
@@ -112,10 +106,9 @@ def enable_workflow(
 def disable_workflow(
     workflow_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """禁用工作流"""
-    ctx = get_request_context(current_user)
     disable_workflow_service(db, ctx, workflow_id)
     return ApiResponse.success(message="工作流已禁用")
 
@@ -125,10 +118,9 @@ def run_workflow(
     workflow_id: int,
     data: WorkflowRunCreate = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """执行工作流"""
-    ctx = get_request_context(current_user)
     input_data = data.input_data if data else None
     result = run_workflow_service(db, ctx, workflow_id, input_data)
     return ApiResponse.success(data=result)
@@ -140,10 +132,9 @@ def list_workflow_runs(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取工作流执行记录列表"""
-    ctx = get_request_context(current_user)
     result = get_workflow_runs_service(db, ctx, workflow_id, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -158,9 +149,8 @@ def list_workflow_runs(
 def get_workflow_run(
     run_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取工作流执行记录详情"""
-    ctx = get_request_context(current_user)
     result = get_workflow_run_detail_service(db, ctx, run_id)
     return ApiResponse.success(data=result)

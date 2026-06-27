@@ -6,7 +6,7 @@ from typing import List
 from database.session import get_db
 from schema.notification import NotificationResponse, NotificationListResponse
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.notification_service import (
     get_notifications_service, get_notification_detail_service, get_unread_count_service,
     mark_as_read_service, mark_all_as_read_service, delete_notification_service,
@@ -25,10 +25,9 @@ def list_notifications(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取通知列表"""
-    ctx = get_request_context(current_user)
     result = get_notifications_service(db, ctx, notification_type, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -43,10 +42,9 @@ def list_notifications(
 def get_notification(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取通知详情"""
-    ctx = get_request_context(current_user)
     result = get_notification_detail_service(db, ctx, notification_id)
     return ApiResponse.success(data=result)
 
@@ -54,10 +52,9 @@ def get_notification(
 @notification_router.get("/unread/count", summary="获取未读数量")
 def get_unread_count(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取未读通知数量"""
-    ctx = get_request_context(current_user)
     result = get_unread_count_service(db, ctx)
     return ApiResponse.success(data=result)
 
@@ -66,10 +63,9 @@ def get_unread_count(
 def mark_read(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """标记通知为已读"""
-    ctx = get_request_context(current_user)
     mark_as_read_service(db, ctx, notification_id)
     return ApiResponse.success(message="已标记为已读")
 
@@ -77,10 +73,9 @@ def mark_read(
 @notification_router.post("/read/all", summary="全部标记为已读")
 def mark_all_read(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """标记所有通知为已读"""
-    ctx = get_request_context(current_user)
     mark_all_as_read_service(db, ctx)
     return ApiResponse.success(message="全部已标记为已读")
 
@@ -89,21 +84,19 @@ def mark_all_read(
 def delete_notification(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除通知"""
-    ctx = get_request_context(current_user)
     delete_notification_service(db, ctx, notification_id)
     return ApiResponse.success(message="通知已删除")
 
 
-@notification_router.delete("/batch", summary="批量删除通知")
+@notification_router.post("/batch", summary="批量删除通知")
 def batch_delete_notifications(
     notification_ids: List[int],
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """批量删除通知"""
-    ctx = get_request_context(current_user)
     batch_delete_notifications_service(db, ctx, notification_ids)
     return ApiResponse.success(message="通知已批量删除")

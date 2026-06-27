@@ -10,7 +10,7 @@ from schema.collect import (
     CollectTaskListResponse, CollectedItemListResponse
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.collect_service import (
     get_platforms_service, create_platform_service,
     get_tasks_service, get_task_detail_service, create_task_service,
@@ -52,10 +52,9 @@ def list_tasks(
     page_size: int = 20,
     is_public: bool = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取采集任务列表"""
-    ctx = get_request_context(current_user)
     result = get_tasks_service(db, ctx, page, page_size, is_public)
     paginated = PaginatedData(
         items=result["items"],
@@ -70,10 +69,9 @@ def list_tasks(
 def get_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取采集任务详情"""
-    ctx = get_request_context(current_user)
     result = get_task_detail_service(db, ctx, task_id)
     return ApiResponse.success(data=result)
 
@@ -101,10 +99,9 @@ def update_task(
     task_id: int,
     data: CollectTaskUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新采集任务"""
-    ctx = get_request_context(current_user)
     result = update_task_service(db, ctx, task_id, **data.model_dump(exclude_unset=True))
     return ApiResponse.success(data=result)
 
@@ -113,10 +110,9 @@ def update_task(
 def delete_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """删除采集任务"""
-    ctx = get_request_context(current_user)
     delete_task_service(db, ctx, task_id)
     return ApiResponse.success(message="任务已删除")
 
@@ -125,10 +121,9 @@ def delete_task(
 def enable_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """启用采集任务"""
-    ctx = get_request_context(current_user)
     enable_task_service(db, ctx, task_id)
     return ApiResponse.success(message="任务已启用")
 
@@ -137,10 +132,9 @@ def enable_task(
 def disable_task(
     task_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """禁用采集任务"""
-    ctx = get_request_context(current_user)
     disable_task_service(db, ctx, task_id)
     return ApiResponse.success(message="任务已禁用")
 
@@ -153,10 +147,9 @@ def list_items(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取采集数据列表"""
-    ctx = get_request_context(current_user)
     result = get_items_service(db, ctx, task_id, status, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -171,10 +164,9 @@ def list_items(
 def get_item(
     item_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取采集数据详情"""
-    ctx = get_request_context(current_user)
     result = get_item_detail_service(db, ctx, item_id)
     return ApiResponse.success(data=result)
 
@@ -184,10 +176,9 @@ def update_item(
     item_id: int,
     data: CollectedItemUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新采集数据"""
-    ctx = get_request_context(current_user)
     result = update_item_service(db, ctx, item_id, **data.model_dump(exclude_unset=True))
     return ApiResponse.success(data=result)
 
@@ -196,10 +187,9 @@ def update_item(
 def clean_item(
     item_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """标记数据为已清洗"""
-    ctx = get_request_context(current_user)
     clean_item_service(db, ctx, item_id)
     return ApiResponse.success(message="数据已清洗")
 
@@ -208,10 +198,9 @@ def clean_item(
 def analyze_item(
     item_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """标记数据为已分析"""
-    ctx = get_request_context(current_user)
     analyze_item_service(db, ctx, item_id)
     return ApiResponse.success(message="数据已分析")
 
@@ -223,9 +212,8 @@ def list_logs(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取采集日志列表"""
-    ctx = get_request_context(current_user)
     result = get_logs_service(db, ctx, task_id, page, page_size)
     return ApiResponse.success(data=result)

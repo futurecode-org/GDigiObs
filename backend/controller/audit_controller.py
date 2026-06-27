@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from database.session import get_db
 from schema.audit import OperationLogResponse, AuditLogResponse, OperationLogListResponse
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.audit_service import (
     get_operation_logs_service, get_audit_logs_service,
     get_ask_records_service, get_ask_record_detail_service,
@@ -26,10 +26,9 @@ def list_operation_logs(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取操作日志"""
-    ctx = get_request_context(current_user)
     result = get_operation_logs_service(db, ctx, module, action, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -48,10 +47,9 @@ def list_audit_logs(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取审计日志"""
-    ctx = get_request_context(current_user)
     result = get_audit_logs_service(db, ctx, audit_type, risk_level, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -71,10 +69,9 @@ def list_ask_records(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取问数记录列表"""
-    ctx = get_request_context(current_user)
     result = get_ask_records_service(db, ctx, page, page_size)
     paginated = PaginatedData(
         items=result["items"],
@@ -89,10 +86,9 @@ def list_ask_records(
 def get_ask_record(
     record_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """获取问数记录详情"""
-    ctx = get_request_context(current_user)
     result = get_ask_record_detail_service(db, ctx, record_id)
     return ApiResponse.success(data=result)
 
@@ -101,10 +97,9 @@ def get_ask_record(
 def create_ask_record(
     question: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """创建问数记录"""
-    ctx = get_request_context(current_user)
     result = create_ask_record_service(db, ctx, question)
     return ApiResponse.success(data=result)
 
@@ -118,10 +113,9 @@ def update_ask_record(
     chart_config: dict = None,
     result_data: dict = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """更新问数记录"""
-    ctx = get_request_context(current_user)
     update_data = {}
     if answer is not None:
         update_data["answer"] = answer
@@ -142,9 +136,8 @@ def update_ask_record(
 def save_ask_record(
     record_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """收藏/取消收藏问数记录"""
-    ctx = get_request_context(current_user)
     result = save_ask_record_service(db, ctx, record_id)
     return ApiResponse.success(data=result)
