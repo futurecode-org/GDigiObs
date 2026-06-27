@@ -1,67 +1,132 @@
-from database.session import Session, get_db  # 导入数据库会话和依赖注入函数
-from schema.user import TokenResponse, RefreshToken, UserLogin, UserRegister, UserResponse  # 导入 Pydantic 请求和响应模型
-from fastapi import APIRouter, Depends  # 导入 FastAPI 路由和依赖注入工具
-from service.user_service import register_user, login_user,logout_user ,get_user_info_by_username,refresh_access_token_by_refresh_token # 导入用户注册服务函数
-from core.security import get_current_user  # 导入全局的鉴权依赖，获取当前的用户信息
-from model.user import User  # 导入用户模型
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from database.session import get_db
+from schema.user import UserResponse, UserUpdate, UserCreate, UserListResponse, AssignRoleRequest
+from core.response import ApiResponse, PaginatedResponse, PaginatedData
+from core.dependencies import get_current_user, require_permission, get_request_context
+from service.user_service import get_user_list, get_user_detail, update_user_profile, assign_roles_to_user, disable_user, ban_user
+
+from model.user import User
 
 
-
-user_router = APIRouter(prefix="/user",tags=["User 用户认证"])
-@user_router.post("/register", response_model=UserResponse)
-def register(user:UserRegister,db:Session = Depends(get_db)):
-    """
-    用户注册接口<br>
-    包含用户名、密码、邮箱等字段
-    """
-    new_user = register_user(db,user)
-    return new_user
+user_router = APIRouter(prefix="/users", tags=["用户管理 User"])
 
 
+@user_router.get("", summary="用户列表")
+def list_users(
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    ctx = require_permission("user:view")
+):
+    """
+    获取用户列表
+    
+    - 管理员可查看租户下所有用户
+    - 超级管理员可查看所有用户
+    - 支持分页
+    """
+    result = get_user_list(db, ctx, page, page_size)
+    paginated = PaginatedData(
+        items=[UserResponse.model_validate(u) for u in result["items"]],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"]
+    )
+    return PaginatedResponse.success(data=paginated)
 
-@user_router.post("/login", response_model=TokenResponse)
-def login(user: UserLogin, db: Session = Depends(get_db)):
+
+@user_router.get("/{user_id}", summary="用户详情")
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    用户登录接口<br>
-    包含用户名和密码字段
+    获取用户详情
+    
+    - 用户只能查看自己的信息
+    - 管理员可查看租户下用户信息
     """
-    access_token,refresh_token = login_user(db,user)
-    return TokenResponse(access_token=access_token,refresh_token=refresh_token)
-   
+    user = get_user_detail(db, user_id, current_user)
+    return ApiResponse.success(data=UserResponse.model_validate(user))
 
 
-@user_router.post("/logout")
-def logout(refresh_token: RefreshToken, db: Session = Depends(get_db)):
+@user_router.put("/{user_id}", summary="更新用户")
+def update_user(
+    user_id: int,
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
-    用户退出登录接口<br>
-    刷新 token 失效
+    更新用户信息
+    
+    - 用户只能修改自己的昵称、头像等
+    - 管理员可修改租户下用户信息
     """
-    # TODO: 实现 token 黑名单或删除 refresh token
-    logout_user(db, refresh_token.token)
-    return {"message": "退出登录成功"}
+    user = update_user_profile(db, user_id, data, current_user)
+    return ApiResponse.success(data=UserResponse.model_validate(user))
 
 
-@user_router.get("/info/{username}", response_model=UserResponse)
-def get_user_info(username: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@user_router.post("/{user_id}/roles", summary="分配角色")
+def assign_roles(
+    user_id: int,
+    data: AssignRoleRequest,
+    db: Session = Depends(get_db),
+    ctx = require_permission("user:assign_role")
+):
     """
-    用户信息接口<br>
-    根据用户名获取用户信息（需要认证）
+    为用户分配角色
+    
+    - 管理员可为用户分配角色
+    - 超级管理员可分配任意角色
+    - 租户管理员只能分配租户内角色
     """
-    return get_user_info_by_username(db, username)
+    assign_roles_to_user(db, user_id, data.role_ids, ctx)
+    return ApiResponse.success(message="角色分配成功")
 
-@user_router.post("/refresh", response_model=TokenResponse)
-def refresh_access_token(refresh_token: RefreshToken, db: Session = Depends(get_db)):
-    """
-    刷新令牌接口<br>
-    使用 refresh token 刷新 access token 和 refresh token
-    """
-    access_token, new_refresh_token = refresh_access_token_by_refresh_token(db, refresh_token.token)
-    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
-   
-@user_router.get("/profile",response_model=UserResponse)
-def get_profile(current_user: User = Depends(get_current_user)):
-    """
-    获取当前用户信息接口
-    """
-    return current_user
 
+@user_router.post("/{user_id}/disable", summary="禁用用户")
+def disable(
+    user_id: int,
+    db: Session = Depends(get_db),
+    ctx = require_permission("user:disable")
+):
+    """
+    禁用用户
+    
+    - 管理员可禁用租户下用户
+    - 被禁用用户无法登录
+    """
+    disable_user(db, user_id, ctx)
+    return ApiResponse.success(message="用户已禁用")
+
+
+@user_router.post("/{user_id}/ban", summary="封禁用户")
+def ban(
+    user_id: int,
+    db: Session = Depends(get_db),
+    ctx = require_permission("user:ban")
+):
+    """
+    封禁用户
+    
+    - 管理员可封禁租户下用户
+    - 被封禁用户无法登录，且相关数据受限
+    """
+    ban_user(db, user_id, ctx)
+    return ApiResponse.success(message="用户已封禁")
+
+
+# 个人中心相关接口
+@user_router.get("/me", summary="获取当前用户信息", deprecated=True)
+def get_me_redirect(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    获取当前用户信息（已迁移至 /api/v1/auth/me）
+    """
+    from service.auth_service import get_current_user_info
+    user_info = get_current_user_info(db, current_user)
+    return ApiResponse.success(data=user_info)

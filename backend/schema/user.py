@@ -1,50 +1,60 @@
-from pydantic import BaseModel, Field  # 导入 Pydantic 数据模型和字段验证工具
-from datetime import datetime  # 导入 datetime 用于时间类型字段
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, List
+from datetime import datetime
 
 
-class UserRegister(BaseModel):
-    """
-    用户注册请求模型
-    包含用户名、密码、邮箱等字段
-    """
-    username: str = Field(..., description="用户名", min_length=4, max_length=20)
-    password: str = Field(..., description="密码", min_length=8, max_length=20)
-    email: str = Field(..., description="邮箱", min_length=4, max_length=50)
+class UserCreate(BaseModel):
+    """创建用户请求"""
+    tenant_id: Optional[int] = Field(None, description="租户ID")
+    username: str = Field(..., min_length=4, max_length=50, description="用户名")
+    password: str = Field(..., min_length=8, max_length=100, description="密码")
+    email: Optional[EmailStr] = Field(None, description="邮箱")
+    phone: Optional[str] = Field(None, max_length=50, description="手机号")
+    nickname: Optional[str] = Field(None, max_length=100, description="昵称")
+    user_type: str = Field(default="internal", description="用户类型: external/internal/admin")
 
 
-class UserLogin(BaseModel):
-    """
-    用户登录请求模型
-    包含用户名、密码等字段
-    """
-    username: str = Field(..., description="用户名", min_length=4, max_length=20)
-    password: str = Field(..., description="密码", min_length=8, max_length=20)
+class UserUpdate(BaseModel):
+    """更新用户请求"""
+    nickname: Optional[str] = Field(None, max_length=100, description="昵称")
+    email: Optional[EmailStr] = Field(None, description="邮箱")
+    phone: Optional[str] = Field(None, max_length=50, description="手机号")
+    avatar_file_id: Optional[int] = Field(None, description="头像文件ID")
+
 
 class UserResponse(BaseModel):
-    """
-    用户响应模型
-    包含用户 ID、用户名、邮箱等字段
-    """
-    id: int = Field(..., description="用户 ID")
+    """用户响应"""
+    id: int = Field(..., description="用户ID")
+    tenant_id: Optional[int] = Field(None, description="租户ID")
     username: str = Field(..., description="用户名")
-    email: str = Field(..., description="邮箱")
-    is_active: bool = Field(..., description="是否激活")
+    email: Optional[str] = Field(None, description="邮箱")
+    phone: Optional[str] = Field(None, description="手机号")
+    nickname: Optional[str] = Field(None, description="昵称")
+    avatar_file_id: Optional[int] = Field(None, description="头像文件ID")
+    user_type: str = Field(..., description="用户类型")
+    status: str = Field(..., description="状态")
+    last_login_at: Optional[datetime] = Field(None, description="最后登录时间")
     created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime | None = Field(None, description="更新时间")
+    updated_at: Optional[datetime] = Field(None, description="更新时间")
+    
+    class Config:
+        from_attributes = True
 
 
-class TokenResponse(BaseModel):
-    """
-    令牌响应模型
-    包含访问令牌、刷新令牌等字段
-    """
-    access_token: str = Field(..., description="访问令牌")
-    refresh_token: str = Field(..., description="刷新令牌")
-    token_type: str = "bearer"
+class UserListResponse(BaseModel):
+    """用户列表响应"""
+    items: List[UserResponse] = Field(default_factory=list, description="用户列表")
+    total: int = Field(default=0, description="总数")
+    page: int = Field(default=1, description="当前页")
+    page_size: int = Field(default=20, description="每页大小")
 
-class RefreshToken(BaseModel):
-    """
-    刷新令牌模型
-    包含刷新令牌等字段
-    """
-    token: str = Field(..., description="刷新令牌")
+
+class AssignRoleRequest(BaseModel):
+    """分配角色请求"""
+    role_ids: List[int] = Field(..., description="角色ID列表")
+
+
+class ChangePasswordRequest(BaseModel):
+    """修改密码请求"""
+    old_password: str = Field(..., description="旧密码")
+    new_password: str = Field(..., min_length=8, max_length=100, description="新密码")

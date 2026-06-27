@@ -1,11 +1,13 @@
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
 from database.session import Base
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from datetime import datetime
-class RefreshTokenModel(Base):
-    __tablename__ = "refresh_token"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer,  ForeignKey("user.id"),index=True)  # 逻辑上认为有一个外键即可
-    token = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default=datetime.now)
-    expire_time = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, onupdate=datetime.now)
+from model.base import BaseModelMixin
+
+
+class RefreshTokenModel(Base, BaseModelMixin):
+    """刷新令牌表"""
+    __tablename__ = "refresh_tokens"
+    
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False, comment="用户ID")
+    token = Column(String(255), nullable=False, unique=True, index=True, comment="刷新令牌")
+    expire_time = Column(DateTime, nullable=False, comment="过期时间")
+    revoked = Column(Boolean, default=False, comment="是否已撤销")
