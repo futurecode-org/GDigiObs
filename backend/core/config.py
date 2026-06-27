@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         return f"mysql+pymysql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATA_PORT}/{self.DATABASE_NAME}?charset=utf8mb4"
 
-    model_config = {"env_file": Path(__file__).parent.parent.parent / ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": Path(__file__).parent.parent.parent / ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()
