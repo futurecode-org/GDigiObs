@@ -322,4 +322,40 @@ def find_children(menus: list[dict], parent_id: int) -> list[dict]:
 def init_system(db: Session):
     """初始化系统"""
     init_system_roles_and_permissions(db)
+    create_default_super_admin(db)
     logger.info("系统初始化完成")
+
+
+def create_default_super_admin(db: Session):
+    """创建默认超级管理员"""
+    from core.config import settings
+    
+    default_admin_username = getattr(settings, "DEFAULT_ADMIN_USERNAME", "admin")
+    default_admin_password = getattr(settings, "DEFAULT_ADMIN_PASSWORD", "admin123")
+    
+    existing_user = get_user_by_username(db, default_admin_username)
+    if existing_user:
+        logger.info(f"默认超级管理员 {default_admin_username} 已存在")
+        return
+    
+    hashed_password = get_password_hash(default_admin_password)
+    user = User(
+        username=default_admin_username,
+        password=hashed_password,
+        nickname="超级管理员",
+        user_type=UserType.INTERNAL,
+        status=UserStatus.NORMAL
+    )
+    
+    user = create_user(db, user)
+    
+    tenant = create_personal_tenant(db, user.id, user.username)
+    user.tenant_id = tenant.id
+    db.commit()
+    db.refresh(user)
+    
+    super_admin_role = get_role_by_code(db, RoleCode.SUPER_ADMIN)
+    if super_admin_role:
+        assign_role_to_user(db, user.id, super_admin_role.id)
+    
+    logger.info(f"默认超级管理员创建成功: {default_admin_username}")
