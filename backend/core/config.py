@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
+    # 初始化超级管理员信息
+    INITIAL_SUPER_ADMIN_USERNAME: str = "admin"
+    INITIAL_SUPER_ADMIN_PASSWORD: str = "admin123"
+    INITIAL_SUPER_ADMIN_EMAIL: str = ""
+    INITIAL_SUPER_ADMIN_PHONE: str = ""
+    INITIAL_SUPER_ADMIN_NICKNAME: str = "超级管理员"
+
     # CORS 配置 - 默认不允许跨域，生产环境必须显式配置
     CORS_ALLOW_ORIGINS: str = ""  # 允许的源，多个域名用逗号分隔，例如: http://localhost:3000,http://example.com
     CORS_ALLOW_CREDENTIALS: bool = False  # 是否允许携带凭证

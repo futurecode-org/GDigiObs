@@ -330,8 +330,8 @@ def create_default_super_admin(db: Session):
     """创建默认超级管理员"""
     from core.config import settings
     
-    default_admin_username = getattr(settings, "DEFAULT_ADMIN_USERNAME", "admin")
-    default_admin_password = getattr(settings, "DEFAULT_ADMIN_PASSWORD", "admin123")
+    default_admin_username = getattr(settings, "INITIAL_SUPER_ADMIN_USERNAME", "admin")
+    default_admin_password = getattr(settings, "INITIAL_SUPER_ADMIN_PASSWORD", "admin123")
     
     existing_user = get_user_by_username(db, default_admin_username)
     if existing_user:
@@ -342,7 +342,9 @@ def create_default_super_admin(db: Session):
     user = User(
         username=default_admin_username,
         password=hashed_password,
-        nickname="超级管理员",
+        email=getattr(settings, "INITIAL_SUPER_ADMIN_EMAIL", ""),
+        phone=getattr(settings, "INITIAL_SUPER_ADMIN_PHONE", ""),
+        nickname=getattr(settings, "INITIAL_SUPER_ADMIN_NICKNAME", "超级管理员"),
         user_type=UserType.INTERNAL,
         status=UserStatus.NORMAL
     )
