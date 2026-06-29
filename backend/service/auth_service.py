@@ -326,6 +326,28 @@ def init_system(db: Session):
     logger.info("系统初始化完成")
 
 
+def change_password(db: Session, user_id: int, old_password: str, new_password: str):
+    """修改密码"""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise NotFoundException("用户不存在")
+    
+    if not verify_password(old_password, user.password):
+        raise BadRequestException("旧密码不正确")
+    
+    if old_password == new_password:
+        raise BadRequestException("新密码不能与旧密码相同")
+    
+    hashed_password = get_password_hash(new_password)
+    user.password = hashed_password
+    db.commit()
+    db.refresh(user)
+    
+    delete_refresh_tokens_by_user(db, user_id)
+    
+    logger.info(f"用户密码修改成功: user_id={user_id}")
+
+
 def create_default_super_admin(db: Session):
     """创建默认超级管理员"""
     from core.config import settings

@@ -5,7 +5,7 @@ from database.session import get_db
 from schema.auth import UserRegister, UserLogin, TokenResponse, RefreshTokenRequest, CurrentUserResponse, LogoutRequest
 from core.response import ApiResponse
 from core.dependencies import get_current_user, get_request_context, RequestContext
-from service.auth_service import register_user, login_user, refresh_token, logout_user, get_current_user_info
+from service.auth_service import register_user, login_user, refresh_token, logout_user, get_current_user_info, change_password
 
 from model.user import User
 
@@ -73,3 +73,26 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
     """
     user_info = get_current_user_info(db, current_user)
     return ApiResponse.success(data=user_info)
+
+
+@auth_router.post("/change-password", summary="修改密码")
+def change_user_password(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    修改密码接口
+    
+    - 用户只能修改自己的密码
+    - 需要验证旧密码
+    - 修改成功后会清除所有刷新令牌，用户需要重新登录
+    """
+    old_password = data.get("old_password")
+    new_password = data.get("new_password")
+    
+    if not old_password or not new_password:
+        return ApiResponse.error(message="旧密码和新密码都不能为空")
+    
+    change_password(db, current_user.id, old_password, new_password)
+    return ApiResponse.success(message="密码修改成功，请重新登录")
