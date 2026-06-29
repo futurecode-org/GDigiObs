@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useState } from "react";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { AdminApp } from "./apps/admin/AdminApp";
 import { UserApp } from "./apps/user/UserApp";
@@ -8,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function AppContent() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const [appMode, setAppMode] = useState<"admin" | "user">("admin");
 
   if (isLoading) {
     return (
@@ -19,6 +21,13 @@ function AppContent() {
 
   const isAdmin = user?.is_super_admin || user?.is_tenant_admin || user?.roles.includes("admin");
 
+  // 非管理员用户只能看到用户端
+  const currentApp = isAdmin ? appMode : "user";
+
+  const handleSwitch = () => {
+    setAppMode(prev => prev === "admin" ? "user" : "admin");
+  };
+
   return (
     <Routes>
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
@@ -28,7 +37,11 @@ function AppContent() {
         element={
           isAuthenticated ? (
             <div className="h-screen">
-              {isAdmin ? <AdminApp onSwitch={() => {}} /> : <UserApp onSwitch={() => {}} />}
+              {currentApp === "admin" ? (
+                <AdminApp onSwitch={isAdmin ? handleSwitch : undefined} />
+              ) : (
+                <UserApp onSwitch={isAdmin ? handleSwitch : undefined} />
+              )}
             </div>
           ) : (
             <Navigate to="/login" replace />

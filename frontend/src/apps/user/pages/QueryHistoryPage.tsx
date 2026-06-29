@@ -1,21 +1,39 @@
-import { useState } from "react"
-import { Clock, ChevronDown, ChevronUp, Trash2, Copy, Check, FileText } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Clock, ChevronDown, ChevronUp, Copy, Check, FileText, Star, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { SectionHeader } from "@/shared/components/SectionHeader"
-
-const historyItems = [
-  { id: 1, query: "过去7天每日采集数据量与清洗数据量对比", time: "2026-06-26 14:25", duration: "3.2s", rows: 7, expanded: false },
-  { id: 2, query: "各平台负向情感数据占比统计", time: "2026-06-26 10:15", duration: "5.8s", rows: 4, expanded: false },
-  { id: 3, query: "本月活跃用户Top 10及消息数量", time: "2026-06-25 16:40", duration: "2.1s", rows: 10, expanded: false },
-  { id: 4, query: "近7天模型调用次数及Token消耗统计", time: "2026-06-25 09:30", duration: "4.5s", rows: 28, expanded: false },
-]
+import { askApi } from "@/lib/api"
+import type { AskRecord, PaginatedData } from "@/lib/types"
 
 export function QueryHistoryPage() {
-  const [items, setItems] = useState(historyItems)
+  const [records, setRecords] = useState<AskRecord[]>([])
+  const [expandedId, setExpandedId] = useState<number | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+
+  const fetchRecords = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const result = await askApi.getList({ page, page_size: 20 }) as PaginatedData<AskRecord>
+      setRecords(result.items)
+      setTotalPages(result.total_pages)
+    } catch (error) {
+      console.error("获取问数历史失败:", error)
+      setRecords([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [page])
+
+  useEffect(() => {
+    fetchRecords()
+  }, [fetchRecords])
 
   const toggleExpand = (id: number) => {
-    setItems(items.map(item => item.id === id ? { ...item, expanded: !item.expanded } : item))
+    setExpandedId(expandedId === id ? null : id)
   }
 
   const handleCopy = (query: string, id: number) => {
@@ -24,66 +42,115 @@ export function QueryHistoryPage() {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
+  const handleSave = async (record: AskRecord) => {
+    try {
+      await askApi.save(record.id)
+      setRecords(records.map(r => r.id === record.id ? { ...r, is_saved: !r.is_saved } : r))
+    } catch (error) {
+      console.error("收藏失败:", error)
+    }
+  }
+
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <SectionHeader title="问数历史" />
-      <div className="space-y-3 mt-4">
-        {items.map(item => (
-          <Card key={item.id}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm text-foreground">{item.query}</span>
-                  </div>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {item.time}
-                    </span>
-                    <span>耗时: {item.duration}</span>
-                    <span>返回 {item.rows} 条结果</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleCopy(item.query, item.id)}
-                    className="p-1.5 rounded hover:bg-muted transition-colors"
-                  >
-                    {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
-                  </button>
-                  <button
-                    onClick={() => toggleExpand(item.id)}
-                    className="p-1.5 rounded hover:bg-muted transition-colors"
-                  >
-                    {item.expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                  </button>
-                  <button className="p-1.5 rounded hover:bg-muted transition-colors text-red-400">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              {item.expanded && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <p className="text-xs text-muted-foreground">SQL 查询结果预览 (共 {item.rows} 条)</p>
-                    <div className="mt-2 space-y-1">
-                      {Array(Math.min(item.rows, 3)).fill(0).map((_, i) => (
-                        <div key={i} className="flex gap-4 text-xs font-mono text-foreground">
-                          <span className="text-muted-foreground">{i + 1}.</span>
-                          <span>数据项 {i + 1}</span>
-                        </div>
-                      ))}
-                      {item.rows > 3 && (
-                        <p className="text-xs text-muted-foreground">... 还有 {item.rows - 3} 条</p>
-                      )}
+    <div className="h-full flex flex-col">
+      <div className="p-4 border-b border-border">
+        <SectionHeader title="问数历史" />
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-8 h-8 animate-spin" />
+          </div>
+        ) : records.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <div className="text-center">
+              <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p>暂无问数记录</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {records.map(record => (
+              <Card key={record.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-foreground truncate">{record.question}</span>
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {record.created_at}
+                        </span>
+                        <span>状态: {record.status}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleSave(record)}
+                        className="p-1.5 rounded hover:bg-muted transition-colors"
+                      >
+                        <Star className={`w-4 h-4 ${record.is_saved ? "text-amber-400 fill-amber-400" : "text-muted-foreground"}`} />
+                      </button>
+                      <button
+                        onClick={() => handleCopy(record.question, record.id)}
+                        className="p-1.5 rounded hover:bg-muted transition-colors"
+                      >
+                        {copiedId === record.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-muted-foreground" />}
+                      </button>
+                      <button
+                        onClick={() => toggleExpand(record.id)}
+                        className="p-1.5 rounded hover:bg-muted transition-colors"
+                      >
+                        {expandedId === record.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                      </button>
                     </div>
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                  {expandedId === record.id && (
+                    <div className="mt-3 pt-3 border-t border-border space-y-3">
+                      {record.answer && (
+                        <div className="p-3 bg-muted/30 rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-1">分析结果</p>
+                          <p className="text-sm text-foreground">{record.answer}</p>
+                        </div>
+                      )}
+                      {record.data_source && (
+                        <div className="p-3 bg-muted/30 rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-1">数据来源</p>
+                          <pre className="text-xs text-foreground overflow-x-auto">{record.data_source}</pre>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  上一页
+                </Button>
+                <span className="text-sm text-muted-foreground">第 {page} / {totalPages} 页</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  下一页
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

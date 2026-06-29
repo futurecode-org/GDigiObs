@@ -1,48 +1,44 @@
 import { PlaceholderPage } from "@/shared/components/PlaceholderPage"
 import { UserManagement } from "./UserManagement"
+import { TenantManagement } from "./TenantManagement"
+import { RoleManagement } from "./RoleManagement"
+import { DataCollection } from "./DataCollection"
+import { ModelManagement } from "./ModelManagement"
+import { OpLogs } from "./OpLogs"
+import { GroupManagement } from "./GroupManagement"
+import { DataClean } from "./DataClean"
+import { DataAnalysis } from "./DataAnalysis"
 
 export { PlaceholderPage }
 
 export { UserManagement }
 
-export function TenantManagement() {
-  return <PlaceholderPage title="租户管理" />
-}
+export { TenantManagement }
+
+export { RoleManagement }
+
+export { DataCollection }
+
+export { ModelManagement }
+
+export { OpLogs }
 
 export function OrgStructure() {
   return <PlaceholderPage title="组织架构" />
-}
-
-export function RoleManagement() {
-  return <PlaceholderPage title="角色管理" />
 }
 
 export function Permissions() {
   return <PlaceholderPage title="权限管理" />
 }
 
-export function GroupManagement() {
-  return <PlaceholderPage title="群组管理" />
-}
+export { GroupManagement }
 
-export function DataCollection() {
-  return <PlaceholderPage title="数据采集" />
-}
+export { DataClean }
 
-export function DataClean() {
-  return <PlaceholderPage title="数据清洗" />
-}
-
-export function DataAnalysis() {
-  return <PlaceholderPage title="数据分析" />
-}
+export { DataAnalysis }
 
 export function DataAudit() {
   return <PlaceholderPage title="数据审计" />
-}
-
-export function ModelManagement() {
-  return <PlaceholderPage title="模型管理" />
 }
 
 export function SkillManagement() {
@@ -71,10 +67,6 @@ export function ChatAudit() {
 
 export function SensitiveWords() {
   return <PlaceholderPage title="敏感词库" />
-}
-
-export function OpLogs() {
-  return <PlaceholderPage title="操作日志" />
 }
 
 export function AuditLogs() {

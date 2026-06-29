@@ -36,7 +36,7 @@ interface AdminAppProps {
   onSwitch?: () => void
 }
 
-export function AdminApp({}: AdminAppProps) {
+export function AdminApp({ onSwitch }: AdminAppProps) {
   const [currentPage, setCurrentPage] = useState<AdminPage>("dashboard")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -75,6 +75,8 @@ export function AdminApp({}: AdminAppProps) {
       <TopBar
         title={pageTitles[currentPage]}
         onNotificationClick={() => setCurrentPage("admin-notifications")}
+        onSwitch={onSwitch}
+        currentMode="admin"
       />
       <div className="flex-1 flex overflow-hidden">
         <AdminSidebar

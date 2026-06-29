@@ -1,19 +1,29 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, User, Users, Check, X } from "lucide-react";
+import { Search, Plus, User, Users, Hash, Check, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { friendApi } from "../../../lib/api";
-import type { Friend, FriendRequest } from "../../../lib/types";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { friendApi, groupApi } from "../../../lib/api";
+import type { Friend, FriendRequest, Group } from "../../../lib/types";
 import { cn } from "@/lib/utils";
 
 export function ContactsPage() {
-  const [activeTab, setActiveTab] = useState<"friends" | "requests">("friends");
+  const [activeTab, setActiveTab] = useState<"friends" | "groups" | "requests">("friends");
   const [friends, setFriends] = useState<Friend[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [createLoading, setCreateLoading] = useState(false);
 
   useEffect(() => {
     if (activeTab === "friends") {
       fetchFriends();
+    } else if (activeTab === "groups") {
+      fetchGroups();
     } else {
       fetchRequests();
     }
@@ -26,6 +36,18 @@ export function ContactsPage() {
       setFriends(result as Friend[]);
     } catch {
       setFriends([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchGroups = async () => {
+    setIsLoading(true);
+    try {
+      const result = await groupApi.getList();
+      setGroups(result as Group[]);
+    } catch {
+      setGroups([]);
     } finally {
       setIsLoading(false);
     }
@@ -47,6 +69,7 @@ export function ContactsPage() {
     try {
       await friendApi.acceptRequest(id);
       fetchRequests();
+      fetchFriends();
     } catch {}
   };
 
@@ -57,7 +80,23 @@ export function ContactsPage() {
     } catch {}
   };
 
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) return;
+    
+    setCreateLoading(true);
+    try {
+      await groupApi.create(groupName, groupDescription || undefined);
+      setShowCreateGroupDialog(false);
+      setGroupName("");
+      setGroupDescription("");
+      fetchGroups();
+    } catch {} finally {
+      setCreateLoading(false);
+    }
+  };
+
   const formatTime = (dateStr: string) => {
+    if (!dateStr) return "";
     const date = new Date(dateStr);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -70,13 +109,70 @@ export function ContactsPage() {
     return date.toLocaleDateString();
   };
 
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "owner": return "群主";
+      case "admin": return "管理员";
+      default: return "成员";
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case "owner": return "bg-red-50 text-red-600";
+      case "admin": return "bg-orange-50 text-orange-600";
+      default: return "bg-muted text-muted-foreground";
+    }
+  };
+
   return (
     <div className="h-full flex">
       <div className="w-72 border-r border-border flex flex-col">
         <div className="p-3 border-b border-border">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-foreground">联系人</h2>
-            <Button variant="default" size="xs"><Plus className="w-4 h-4" /></Button>
+            <Dialog open={showCreateGroupDialog} onOpenChange={setShowCreateGroupDialog}>
+              <DialogTrigger asChild>
+                <Button variant="default" size="xs"><Plus className="w-4 h-4" /></Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    创建群组
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="groupName">群组名称 *</Label>
+                    <Input
+                      id="groupName"
+                      value={groupName}
+                      onChange={e => setGroupName(e.target.value)}
+                      placeholder="请输入群组名称"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="groupDescription">群组描述</Label>
+                    <Input
+                      id="groupDescription"
+                      value={groupDescription}
+                      onChange={e => setGroupDescription(e.target.value)}
+                      placeholder="请输入群组描述（可选）"
+                    />
+                  </div>
+                  <div className="flex gap-2 mt-6">
+                    <Button variant="outline" className="flex-1" onClick={() => setShowCreateGroupDialog(false)}>
+                      取消
+                    </Button>
+                    <Button className="flex-1" onClick={handleCreateGroup} disabled={createLoading || !groupName.trim()}>
+                      {createLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      创建
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -92,6 +188,12 @@ export function ContactsPage() {
               className={cn("flex-1 py-1.5 text-xs rounded transition-colors flex items-center justify-center gap-1", activeTab === "friends" ? "bg-primary/10 text-primary" : "text-muted-foreground")}
             >
               <Users className="w-3 h-3" /> 好友
+            </button>
+            <button
+              onClick={() => setActiveTab("groups")}
+              className={cn("flex-1 py-1.5 text-xs rounded transition-colors flex items-center justify-center gap-1", activeTab === "groups" ? "bg-primary/10 text-primary" : "text-muted-foreground")}
+            >
+              <Hash className="w-3 h-3" /> 群组
             </button>
             <button
               onClick={() => setActiveTab("requests")}
@@ -146,6 +248,46 @@ export function ContactsPage() {
                 ))}
               </div>
             )
+          ) : activeTab === "groups" ? (
+            groups.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Hash className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>暂无群组</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowCreateGroupDialog(true)}>
+                  <Plus className="w-4 h-4" /> 创建群组
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase">
+                  群组 ({groups.length})
+                </div>
+                {groups.map(group => (
+                  <button
+                    key={group.id}
+                    className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center">
+                      <Hash className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{group.name}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground">{group.member_count} 成员</span>
+                        {group.description && (
+                          <span className="text-[10px] text-muted-foreground truncate">· {group.description}</span>
+                        )}
+                      </div>
+                    </div>
+                    {group.members && group.members.length > 0 && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded ${getRoleColor(group.members[0]?.role || "member")}`}>
+                        {getRoleLabel(group.members[0]?.role || "member")}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )
           ) : (
             requests.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
@@ -181,8 +323,17 @@ export function ContactsPage() {
 
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center text-muted-foreground">
-          <User className="w-16 h-16 mx-auto mb-4 opacity-50" />
-          <p>选择一个联系人开始聊天</p>
+          {activeTab === "groups" ? (
+            <>
+              <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p>选择一个群组开始聊天</p>
+            </>
+          ) : (
+            <>
+              <User className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p>选择一个联系人开始聊天</p>
+            </>
+          )}
         </div>
       </div>
     </div>

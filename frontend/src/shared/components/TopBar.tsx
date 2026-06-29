@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, LogOut, UserCircle, Settings } from "lucide-react";
+import { Bell, LogOut, UserCircle, Settings, Shield, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -10,9 +10,11 @@ import { notificationApi } from "../../lib/api";
 interface TopBarProps {
   title: string;
   onNotificationClick?: () => void;
+  onSwitch?: () => void;
+  currentMode?: "admin" | "user";
 }
 
-export function TopBar({ title, onNotificationClick }: TopBarProps) {
+export function TopBar({ title, onNotificationClick, onSwitch, currentMode }: TopBarProps) {
   const { user, logout } = useAuth();
   const [notificationCount, setNotificationCount] = useState(0);
 
@@ -41,6 +43,26 @@ export function TopBar({ title, onNotificationClick }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-2">
+        {onSwitch && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSwitch}
+            className="gap-2"
+          >
+            {currentMode === "admin" ? (
+              <>
+                <User className="w-4 h-4" />
+                <span className="text-xs">切换用户端</span>
+              </>
+            ) : (
+              <>
+                <Shield className="w-4 h-4" />
+                <span className="text-xs">切换管理端</span>
+              </>
+            )}
+          </Button>
+        )}
         <div className="relative">
           <Button variant="ghost" size="icon" onClick={onNotificationClick}>
             <Bell className="w-5 h-5 text-muted-foreground" />
