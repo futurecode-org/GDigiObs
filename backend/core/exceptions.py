@@ -69,3 +69,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         status_code=200,
         content=ApiResponse.error(code=exc.status_code, message=str(exc.detail)).model_dump()
     )
+
+
+async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """未捕获异常处理器"""
+    return JSONResponse(
+        status_code=500,
+        content=ApiResponse.error(code=ResponseCode.INTERNAL_ERROR, message="服务器内部错误").model_dump()
+    )

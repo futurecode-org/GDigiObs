@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -21,7 +21,7 @@ from controller.notification_controller import notification_router
 from controller.file_controller import file_router
 from controller.audit_controller import audit_router, ask_router
 from controller.dify_controller import dify_router, assistant_router
-from core.exceptions import BusinessException, business_exception_handler, http_exception_handler
+from core.exceptions import BusinessException, business_exception_handler, generic_exception_handler, http_exception_handler
 from core.response import ApiResponse
 from core.config import settings
 from service.auth_service import init_system
@@ -65,7 +65,8 @@ app.add_middleware(
 
 # 注册异常处理器
 app.add_exception_handler(BusinessException, business_exception_handler)
-app.add_exception_handler(Exception, http_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
 
 # 注册路由
 app.include_router(auth_router, prefix="/api/v1")

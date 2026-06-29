@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, JSON, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, Text, JSON, DateTime
 from database.session import Base
 from model.base import BaseModelMixin
 
@@ -22,12 +22,6 @@ class DigitalAgent(Base, BaseModelMixin):
     visibility = Column(String(20), default="personal", comment="可见范围: personal/tenant/public")
     status = Column(String(20), default="enabled", comment="状态")
     deleted_at = Column(DateTime, nullable=True, comment="删除时间")
-    agent_engine = Column(String(20), default="native", comment="执行引擎: native/dify/hybrid")
-    dify_app_id = Column(Integer, ForeignKey("dify_apps.id"), nullable=True, index=True, comment="绑定的Dify App ID")
-    dify_app_type = Column(String(30), nullable=True, comment="Dify应用类型")
-    dify_conversation_strategy = Column(String(20), default="reuse", comment="会话策略: reuse/new")
-    dify_input_mapping = Column(JSON, nullable=True, comment="输入映射")
-    dify_output_mapping = Column(JSON, nullable=True, comment="输出映射")
 
 
 class AgentRun(Base, BaseModelMixin):

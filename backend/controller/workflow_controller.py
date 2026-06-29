@@ -22,6 +22,24 @@ from model.user import User
 workflow_router = APIRouter(prefix="/workflows", tags=["工作流管理 Workflow"])
 
 
+@workflow_router.get("/runs", summary="获取执行记录列表")
+def list_workflow_runs_all(
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """获取工作流执行记录列表"""
+    result = get_workflow_runs_service(db, ctx, None, page, page_size)
+    paginated = PaginatedData(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"]
+    )
+    return PaginatedResponse.success(data=paginated)
+
+
 @workflow_router.get("", summary="获取工作流列表")
 def list_workflows(
     status: str = None,
@@ -126,7 +144,7 @@ def run_workflow(
     return ApiResponse.success(data=result)
 
 
-@workflow_router.get("/{workflow_id}/runs", summary="获取执行记录列表")
+@workflow_router.get("/{workflow_id}/runs", summary="获取指定工作流执行记录列表")
 def list_workflow_runs(
     workflow_id: int,
     page: int = 1,

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, JSON, DateTime
+from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey
 from database.session import Base
 from model.base import BaseModelMixin
 
@@ -19,4 +19,3 @@ class Skill(Base, BaseModelMixin):
     review_status = Column(String(20), default="draft", comment="审核状态: draft/pending/approved/rejected")
     status = Column(String(20), default="enabled", comment="状态")
     deleted_at = Column(DateTime, nullable=True, comment="删除时间")
-    dify_app_id = Column(Integer, ForeignKey("dify_apps.id"), nullable=True, index=True, comment="绑定的Dify App ID")

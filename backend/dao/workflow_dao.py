@@ -142,6 +142,16 @@ def get_workflow_runs(db: Session, tenant_id: int, workflow_id: int = None,
     return query.order_by(desc(WorkflowRun.created_at)).offset((page - 1) * page_size).limit(page_size).all()
 
 
+def count_workflow_runs(db: Session, tenant_id: int, workflow_id: int = None) -> int:
+    """统计执行记录数量"""
+    query = db.query(WorkflowRun).filter(WorkflowRun.tenant_id == tenant_id)
+
+    if workflow_id:
+        query = query.filter(WorkflowRun.workflow_id == workflow_id)
+
+    return query.count()
+
+
 def get_workflow_run_by_id(db: Session, run_id: int) -> Optional[WorkflowRun]:
     """获取执行记录详情"""
     return db.query(WorkflowRun).filter(WorkflowRun.id == run_id).first()

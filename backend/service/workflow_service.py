@@ -9,7 +9,7 @@ from dao.workflow_dao import (
     get_workflows, count_workflows, get_workflow_by_id, create_workflow,
     update_workflow, delete_workflow, enable_workflow, disable_workflow,
     create_workflow_run, update_workflow_run, get_workflow_runs,
-    get_workflow_run_by_id, create_node_log, update_node_log, get_node_logs
+    count_workflow_runs, get_workflow_run_by_id, create_node_log, update_node_log, get_node_logs
 )
 from core.exceptions import NotFoundException, ForbiddenException
 from core.dependencies import RequestContext
@@ -267,6 +267,7 @@ def get_workflow_runs_service(db: Session, ctx: RequestContext, workflow_id: int
                               page: int = 1, page_size: int = 20) -> Dict:
     """获取执行记录列表"""
     runs = get_workflow_runs(db, ctx.tenant_id, workflow_id, page, page_size)
+    total = count_workflow_runs(db, ctx.tenant_id, workflow_id)
     
     run_list = []
     for run in runs:
@@ -281,7 +282,7 @@ def get_workflow_runs_service(db: Session, ctx: RequestContext, workflow_id: int
     
     return {
         "items": run_list,
-        "total": len(runs),
+        "total": total,
         "page": page,
         "page_size": page_size
     }

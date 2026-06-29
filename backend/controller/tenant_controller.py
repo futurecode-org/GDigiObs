@@ -25,7 +25,13 @@ def list_tenants(
     - 支持分页
     """
     result = get_tenant_list(db, page, page_size)
-    paginated = PaginatedData(**result)
+    paginated = PaginatedData(
+        items=[TenantResponse.model_validate(tenant) for tenant in result["items"]],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"]
+    )
     return PaginatedResponse.success(data=paginated)
 
 

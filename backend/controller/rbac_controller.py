@@ -25,7 +25,13 @@ def list_roles(
     """
     from service.rbac_service import get_role_list
     result = get_role_list(db, ctx, page, page_size)
-    paginated = PaginatedData(**result)
+    paginated = PaginatedData(
+        items=[RoleResponse.model_validate(role) for role in result["items"]],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"]
+    )
     return PaginatedResponse.success(data=paginated)
 
 
