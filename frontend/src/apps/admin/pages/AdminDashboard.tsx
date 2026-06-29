@@ -5,38 +5,48 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader } from "@/shared/components/SectionHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { notificationApi, userApi } from "../../../lib/api";
+import { collectApi, modelApi, notificationApi, userApi } from "../../../lib/api";
 import type { Notification as NotificationType, User } from "../../../lib/types";
 
 export function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
+  const [stats, setStats] = useState({ users: 0, notifications: 0, collected: 0, models: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  async function fetchDashboardData() {
     setIsLoading(true);
     try {
-      const [userResult, notifResult] = await Promise.all([
+      const [userResult, notifResult, collectResult, modelResult] = await Promise.all([
         userApi.getList({ page: 1, page_size: 5 }),
-        notificationApi.getList({ page: 1, page_size: 3 })
+        notificationApi.getList({ page: 1, page_size: 3 }),
+        collectApi.getItems({ page: 1, page_size: 1 }),
+        modelApi.getList({ page: 1, page_size: 1 })
       ]);
 
-      const userList = (userResult as { items: User[] }).items || [];
+      const userList = userResult.items || [];
       setUsers(userList);
 
-      const notifList = (notifResult as { items: NotificationType[] }).items || [];
+      const notifList = notifResult.items || [];
       setNotifications(notifList.filter(n => !n.read));
+      setStats({
+        users: userResult.total,
+        notifications: notifResult.total,
+        collected: collectResult.total,
+        models: modelResult.total
+      });
     } catch {
       setUsers([]);
       setNotifications([]);
+      setStats({ users: 0, notifications: 0, collected: 0, models: 0 });
     } finally {
       setIsLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    void Promise.resolve().then(fetchDashboardData);
+  }, []);
 
   const activityData = [
     { date: "周一", messages: 1200, queries: 350, tasks: 120 },
@@ -72,10 +82,10 @@ export function AdminDashboard() {
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="今日活跃用户" value="2,847" icon={Users} trend={12.5} color="primary" />
-        <StatCard label="消息发送量" value="45,682" icon={MessageSquare} trend={8.3} color="success" />
-        <StatCard label="数据采集量" value="13,290" icon={Database} trend={15.7} color="info" />
-        <StatCard label="模型调用次数" value="19,680" icon={Activity} trend={-2.1} color="purple" />
+        <StatCard label="用户总数" value={stats.users.toLocaleString()} icon={Users} trend={12.5} color="primary" />
+        <StatCard label="系统通知" value={stats.notifications.toLocaleString()} icon={MessageSquare} trend={8.3} color="success" />
+        <StatCard label="数据采集量" value={stats.collected.toLocaleString()} icon={Database} trend={15.7} color="info" />
+        <StatCard label="模型配置" value={stats.models.toLocaleString()} icon={Activity} trend={-2.1} color="purple" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

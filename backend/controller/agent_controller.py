@@ -39,6 +39,17 @@ def list_agents(
     return PaginatedResponse.success(data=paginated)
 
 
+@agent_router.get("/runs/{run_id}", summary="获取执行记录详情")
+def get_agent_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """获取执行记录详情"""
+    result = get_agent_run_detail_service(db, ctx, run_id)
+    return ApiResponse.success(data=result)
+
+
 @agent_router.get("/{agent_id}", summary="获取数字员工详情")
 def get_agent(
     agent_id: int,
@@ -126,14 +137,3 @@ def list_agent_runs(
         page_size=result["page_size"]
     )
     return PaginatedResponse.success(data=paginated)
-
-
-@agent_router.get("/runs/{run_id}", summary="获取执行记录详情")
-def get_agent_run(
-    run_id: int,
-    db: Session = Depends(get_db),
-    ctx: RequestContext = Depends(get_request_context)
-):
-    """获取执行记录详情"""
-    result = get_agent_run_detail_service(db, ctx, run_id)
-    return ApiResponse.success(data=result)

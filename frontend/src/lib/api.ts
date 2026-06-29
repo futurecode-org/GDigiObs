@@ -1,4 +1,32 @@
-import type { PaginatedData, TokenResponse, CurrentUserResponse } from "./types";
+import type {
+  Agent,
+  AgentRun,
+  AnalysisTask,
+  AskRecord,
+  CollectedItem,
+  CollectPlatform,
+  CollectTask,
+  Conversation,
+  CurrentUserResponse,
+  Friend,
+  FriendApplication,
+  Group,
+  KnowledgeBase,
+  KnowledgeFile,
+  Message,
+  ModelConfig,
+  Notification,
+  OperationLog,
+  PaginatedData,
+  Permission,
+  Role,
+  Skill,
+  Tenant,
+  TokenResponse,
+  User,
+  Workflow,
+  WorkflowRun,
+} from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
@@ -51,13 +79,12 @@ async function refreshTokenIfNeeded(): Promise<void> {
   if (isRefreshing) return refreshPromise!;
 
   isRefreshing = true;
-  refreshPromise = new Promise(async (resolve, reject) => {
+  refreshPromise = (async () => {
     try {
       const refreshToken = getRefreshToken();
       if (!refreshToken) {
         clearAuthStorage();
-        reject(new Error("No refresh token"));
-        return;
+        throw new Error("No refresh token");
       }
 
       const response = await fetch(`${BASE_URL}/auth/refresh`, {
@@ -71,23 +98,21 @@ async function refreshTokenIfNeeded(): Promise<void> {
       const result = await response.json();
       if (result.code !== 0) {
         clearAuthStorage();
-        reject(new Error(result.message || "Failed to refresh token"));
-        return;
+        throw new Error(result.message || "Failed to refresh token");
       }
 
       const data = result.data as TokenResponse;
       setAccessToken(data.access_token);
       setRefreshToken(data.refresh_token);
       setExpiresAt(data.expires_in);
-      resolve();
     } catch (error) {
       clearAuthStorage();
-      reject(error);
+      throw error;
     } finally {
       isRefreshing = false;
       refreshPromise = null;
     }
-  });
+  })();
 
   return refreshPromise;
 }
@@ -189,10 +214,10 @@ export const authApi = {
 };
 
 export const notificationApi = {
-  getList: (params?: { notification_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { notification_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<Notification>> =>
     get("/notifications", params),
 
-  getDetail: (notificationId: number): Promise<unknown> =>
+  getDetail: (notificationId: number): Promise<Notification> =>
     get(`/notifications/${notificationId}`),
 
   getUnreadCount: (): Promise<number> =>
@@ -212,19 +237,19 @@ export const notificationApi = {
 };
 
 export const conversationApi = {
-  getList: (): Promise<unknown[]> =>
+  getList: (): Promise<Conversation[]> =>
     get("/conversations"),
 
-  getDetail: (conversationId: number): Promise<unknown> =>
+  getDetail: (conversationId: number): Promise<Conversation> =>
     get(`/conversations/${conversationId}`),
 
-  create: (targetUserId: number): Promise<unknown> =>
+  create: (targetUserId: number): Promise<Conversation> =>
     post("/conversations", { target_user_id: targetUserId }),
 
-  getMessages: (conversationId: number, params?: { page?: number; page_size?: number }): Promise<unknown[]> =>
+  getMessages: (conversationId: number, params?: { page?: number; page_size?: number }): Promise<Message[]> =>
     get(`/conversations/${conversationId}/messages`, params),
 
-  sendMessage: (conversationId: number, messageType: string, content: string, fileId?: number): Promise<unknown> =>
+  sendMessage: (conversationId: number, messageType: string, content: string, fileId?: number): Promise<Message> =>
     post(`/conversations/${conversationId}/messages`, {
       message_type: messageType,
       content,
@@ -242,16 +267,16 @@ export const conversationApi = {
 };
 
 export const friendApi = {
-  getList: (): Promise<unknown[]> =>
+  getList: (): Promise<Friend[]> =>
     get("/friends"),
 
   apply: (toUserId: number, message?: string): Promise<void> =>
     post("/friends/apply", { to_user_id: toUserId, message }),
 
-  getApplications: (): Promise<unknown[]> =>
+  getApplications: (): Promise<FriendApplication[]> =>
     get("/friends/applications"),
 
-  getRequests: (): Promise<unknown[]> =>
+  getRequests: (): Promise<FriendApplication[]> =>
     get("/friends/applications"),
 
   acceptApplication: (applicationId: number): Promise<void> =>
@@ -271,13 +296,13 @@ export const friendApi = {
 };
 
 export const groupApi = {
-  getList: (): Promise<unknown[]> =>
+  getList: (): Promise<Group[]> =>
     get("/groups"),
 
-  getDetail: (groupId: number): Promise<unknown> =>
+  getDetail: (groupId: number): Promise<Group> =>
     get(`/groups/${groupId}`),
 
-  create: (name: string, description?: string, maxMembers?: number): Promise<unknown> =>
+  create: (name: string, description?: string, maxMembers?: number): Promise<Group> =>
     post("/groups", { name, description, max_members: maxMembers }),
 
   addMembers: (groupId: number, userIds: number[]): Promise<void> =>
@@ -289,7 +314,7 @@ export const groupApi = {
   leave: (groupId: number): Promise<void> =>
     post(`/groups/${groupId}/leave`),
 
-  update: (groupId: number, data?: { name?: string; description?: string }): Promise<unknown> =>
+  update: (groupId: number, data?: { name?: string; description?: string }): Promise<Group> =>
     put(`/groups/${groupId}`, data),
 
   setAdmin: (groupId: number, userId: number, isAdmin?: boolean): Promise<void> =>
@@ -300,13 +325,13 @@ export const groupApi = {
 };
 
 export const userApi = {
-  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<User>> =>
     get("/users", params),
 
-  getDetail: (userId: number): Promise<unknown> =>
+  getDetail: (userId: number): Promise<User> =>
     get(`/users/${userId}`),
 
-  update: (userId: number, data: unknown): Promise<unknown> =>
+  update: (userId: number, data: unknown): Promise<User> =>
     put(`/users/${userId}`, data),
 
   assignRoles: (userId: number, roleIds: number[]): Promise<void> =>
@@ -320,42 +345,42 @@ export const userApi = {
 };
 
 export const agentApi = {
-  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<Agent>> =>
     get("/agents", params),
 
-  getDetail: (agentId: number): Promise<unknown> =>
+  getDetail: (agentId: number): Promise<Agent> =>
     get(`/agents/${agentId}`),
 
-  create: (data: unknown): Promise<unknown> =>
+  create: (data: unknown): Promise<Agent> =>
     post("/agents", data),
 
-  update: (agentId: number, data: unknown): Promise<unknown> =>
+  update: (agentId: number, data: unknown): Promise<Agent> =>
     put(`/agents/${agentId}`, data),
 
   delete: (agentId: number): Promise<void> =>
     del(`/agents/${agentId}`),
 
-  run: (agentId: number, inputData?: unknown): Promise<unknown> =>
+  run: (agentId: number, inputData?: unknown): Promise<AgentRun> =>
     post(`/agents/${agentId}/run`, inputData ? { input_data: inputData } : undefined),
 
-  getRuns: (agentId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getRuns: (agentId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<AgentRun>> =>
     get(`/agents/${agentId}/runs`, params),
 
-  getRunDetail: (runId: number): Promise<unknown> =>
+  getRunDetail: (runId: number): Promise<AgentRun> =>
     get(`/agents/runs/${runId}`),
 };
 
 export const skillApi = {
-  getList: (params?: { skill_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { skill_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<Skill>> =>
     get("/skills", params),
 
-  getDetail: (skillId: number): Promise<unknown> =>
+  getDetail: (skillId: number): Promise<Skill> =>
     get(`/skills/${skillId}`),
 
-  create: (data: unknown): Promise<unknown> =>
+  create: (data: unknown): Promise<Skill> =>
     post("/skills", data),
 
-  update: (skillId: number, data: unknown): Promise<unknown> =>
+  update: (skillId: number, data: unknown): Promise<Skill> =>
     put(`/skills/${skillId}`, data),
 
   delete: (skillId: number): Promise<void> =>
@@ -369,25 +394,25 @@ export const skillApi = {
 };
 
 export const knowledgeApi = {
-  getList: (params?: { kb_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { kb_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<KnowledgeBase>> =>
     get("/knowledge", params),
 
-  getDetail: (kbId: number): Promise<unknown> =>
+  getDetail: (kbId: number): Promise<KnowledgeBase> =>
     get(`/knowledge/${kbId}`),
 
-  create: (data: unknown): Promise<unknown> =>
+  create: (data: unknown): Promise<KnowledgeBase> =>
     post("/knowledge", data),
 
-  update: (kbId: number, data: unknown): Promise<unknown> =>
+  update: (kbId: number, data: unknown): Promise<KnowledgeBase> =>
     put(`/knowledge/${kbId}`, data),
 
   delete: (kbId: number): Promise<void> =>
     del(`/knowledge/${kbId}`),
 
-  getFiles: (kbId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getFiles: (kbId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<KnowledgeFile>> =>
     get(`/knowledge/${kbId}/files`, params),
 
-  addFile: (kbId: number, fileId: number): Promise<unknown> =>
+  addFile: (kbId: number, fileId: number): Promise<KnowledgeFile> =>
     post(`/knowledge/${kbId}/files`, { file_id: fileId }),
 
   deleteFile: (kbId: number, fileId: number): Promise<void> =>
@@ -398,16 +423,16 @@ export const knowledgeApi = {
 };
 
 export const workflowApi = {
-  getList: (params?: { status?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { status?: string; page?: number; page_size?: number }): Promise<PaginatedData<Workflow>> =>
     get("/workflows", params),
 
-  getDetail: (workflowId: number): Promise<unknown> =>
+  getDetail: (workflowId: number): Promise<Workflow> =>
     get(`/workflows/${workflowId}`),
 
-  create: (data: unknown): Promise<unknown> =>
+  create: (data: unknown): Promise<Workflow> =>
     post("/workflows", data),
 
-  update: (workflowId: number, data: unknown): Promise<unknown> =>
+  update: (workflowId: number, data: unknown): Promise<Workflow> =>
     put(`/workflows/${workflowId}`, data),
 
   delete: (workflowId: number): Promise<void> =>
@@ -419,36 +444,36 @@ export const workflowApi = {
   disable: (workflowId: number): Promise<void> =>
     post(`/workflows/${workflowId}/disable`),
 
-  run: (workflowId: number, inputData?: unknown): Promise<unknown> =>
+  run: (workflowId: number, inputData?: unknown): Promise<WorkflowRun> =>
     post(`/workflows/${workflowId}/run`, inputData ? { input_data: inputData } : undefined),
 
-  getRuns: (workflowId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getRuns: (workflowId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<WorkflowRun>> =>
     get(`/workflows/${workflowId}/runs`, params),
 
-  getRunDetail: (runId: number): Promise<unknown> =>
+  getRunDetail: (runId: number): Promise<WorkflowRun> =>
     get(`/workflows/runs/${runId}`),
 
-  getTasks: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getTasks: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<WorkflowRun>> =>
     get("/workflows/runs", params),
 };
 
 export const collectApi = {
-  getPlatforms: (): Promise<unknown[]> =>
+  getPlatforms: (): Promise<CollectPlatform[]> =>
     get("/collect/platforms"),
 
-  createPlatform: (data: unknown): Promise<unknown> =>
+  createPlatform: (data: unknown): Promise<CollectPlatform> =>
     post("/collect/platforms", data),
 
-  getTasks: (params?: { is_public?: boolean; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getTasks: (params?: { is_public?: boolean; page?: number; page_size?: number }): Promise<PaginatedData<CollectTask>> =>
     get("/collect/tasks", params),
 
-  getTaskDetail: (taskId: number): Promise<unknown> =>
+  getTaskDetail: (taskId: number): Promise<CollectTask> =>
     get(`/collect/tasks/${taskId}`),
 
-  createTask: (data: unknown): Promise<unknown> =>
+  createTask: (data: unknown): Promise<CollectTask> =>
     post("/collect/tasks", data),
 
-  updateTask: (taskId: number, data: unknown): Promise<unknown> =>
+  updateTask: (taskId: number, data: unknown): Promise<CollectTask> =>
     put(`/collect/tasks/${taskId}`, data),
 
   deleteTask: (taskId: number): Promise<void> =>
@@ -460,13 +485,13 @@ export const collectApi = {
   disableTask: (taskId: number): Promise<void> =>
     post(`/collect/tasks/${taskId}/disable`),
 
-  getItems: (params?: { task_id?: number; status?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getItems: (params?: { task_id?: number; status?: string; page?: number; page_size?: number }): Promise<PaginatedData<CollectedItem>> =>
     get("/collect/items", params),
 
-  getItemDetail: (itemId: number): Promise<unknown> =>
+  getItemDetail: (itemId: number): Promise<CollectedItem> =>
     get(`/collect/items/${itemId}`),
 
-  updateItem: (itemId: number, data: unknown): Promise<unknown> =>
+  updateItem: (itemId: number, data: unknown): Promise<CollectedItem> =>
     put(`/collect/items/${itemId}`, data),
 
   cleanItem: (itemId: number): Promise<void> =>
@@ -480,22 +505,22 @@ export const collectApi = {
 };
 
 export const analysisApi = {
-  getTasks: (params?: { analysis_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getTasks: (params?: { analysis_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<AnalysisTask>> =>
     get("/analysis/tasks", params),
 
-  getTaskDetail: (taskId: number): Promise<unknown> =>
+  getTaskDetail: (taskId: number): Promise<AnalysisTask> =>
     get(`/analysis/tasks/${taskId}`),
 
-  createTask: (data: unknown): Promise<unknown> =>
+  createTask: (data: unknown): Promise<AnalysisTask> =>
     post("/analysis/tasks", data),
 
-  updateTask: (taskId: number, data: unknown): Promise<unknown> =>
+  updateTask: (taskId: number, data: unknown): Promise<AnalysisTask> =>
     put(`/analysis/tasks/${taskId}`, data),
 
   deleteTask: (taskId: number): Promise<void> =>
     del(`/analysis/tasks/${taskId}`),
 
-  execute: (taskId: number): Promise<unknown> =>
+  execute: (taskId: number): Promise<AnalysisTask> =>
     post(`/analysis/tasks/${taskId}/execute`),
 
   getLogs: (params?: { task_id?: number; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
@@ -503,16 +528,16 @@ export const analysisApi = {
 };
 
 export const askApi = {
-  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<AskRecord>> =>
     get("/ask", params),
 
-  getDetail: (recordId: number): Promise<unknown> =>
+  getDetail: (recordId: number): Promise<AskRecord> =>
     get(`/ask/${recordId}`),
 
-  create: (question: string): Promise<unknown> =>
+  create: (question: string): Promise<AskRecord> =>
     post("/ask", { question }),
 
-  update: (recordId: number, data?: { answer?: string; data_source?: string; chart_type?: string; chart_config?: unknown; result_data?: unknown }): Promise<unknown> =>
+  update: (recordId: number, data?: { answer?: string; data_source?: string; chart_type?: string; chart_config?: unknown; result_data?: unknown }): Promise<AskRecord> =>
     put(`/ask/${recordId}`, data),
 
   save: (recordId: number): Promise<void> =>
@@ -520,16 +545,16 @@ export const askApi = {
 };
 
 export const tenantApi = {
-  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<Tenant>> =>
     get("/tenants", params),
 
-  getDetail: (tenantId: number): Promise<unknown> =>
+  getDetail: (tenantId: number): Promise<Tenant> =>
     get(`/tenants/${tenantId}`),
 
-  create: (data: { name: string; tenant_type?: string; description?: string; contact_name?: string; contact_email?: string; contact_phone?: string }): Promise<unknown> =>
+  create: (data: { name: string; tenant_type?: string; description?: string; contact_name?: string; contact_email?: string; contact_phone?: string }): Promise<Tenant> =>
     post("/tenants", data),
 
-  update: (tenantId: number, data: unknown): Promise<unknown> =>
+  update: (tenantId: number, data: unknown): Promise<Tenant> =>
     put(`/tenants/${tenantId}`, data),
 
   disable: (tenantId: number): Promise<void> =>
@@ -537,30 +562,30 @@ export const tenantApi = {
 };
 
 export const rbacApi = {
-  getRoles: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getRoles: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<Role>> =>
     get("/rbac/roles", params),
 
-  getRoleDetail: (roleId: number): Promise<unknown> =>
+  getRoleDetail: (roleId: number): Promise<Role> =>
     get(`/rbac/roles/${roleId}`),
 
-  createRole: (data: { name: string; code: string; description?: string; permission_ids?: number[] }): Promise<unknown> =>
+  createRole: (data: { name: string; code: string; description?: string; permission_ids?: number[] }): Promise<Role> =>
     post("/rbac/roles", data),
 
-  updateRole: (roleId: number, data: unknown): Promise<unknown> =>
+  updateRole: (roleId: number, data: unknown): Promise<Role> =>
     put(`/rbac/roles/${roleId}`, data),
 
   assignPermissions: (roleId: number, permissionIds: number[]): Promise<void> =>
     post(`/rbac/roles/${roleId}/permissions`, { permission_ids: permissionIds }),
 
-  getPermissions: (): Promise<unknown[]> =>
+  getPermissions: (): Promise<Permission[]> =>
     get("/rbac/permissions"),
 
-  getMenuPermissions: (): Promise<unknown[]> =>
+  getMenuPermissions: (): Promise<Permission[]> =>
     get("/rbac/permissions/menu"),
 };
 
 export const auditApi = {
-  getOperationLogs: (params?: { module?: string; action?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getOperationLogs: (params?: { module?: string; action?: string; page?: number; page_size?: number }): Promise<PaginatedData<OperationLog>> =>
     get("/audit/operations", params),
 
   getAuditLogs: (params?: { audit_type?: string; risk_level?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
@@ -568,27 +593,27 @@ export const auditApi = {
 };
 
 export const modelApi = {
-  getList: (params?: { model_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+  getList: (params?: { model_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<ModelConfig>> =>
     get("/models", params),
 
-  getPlatformModels: (): Promise<unknown[]> =>
+  getPlatformModels: (): Promise<ModelConfig[]> =>
     get("/models/platform"),
 
-  getEmbeddingModels: (): Promise<unknown[]> =>
+  getEmbeddingModels: (): Promise<ModelConfig[]> =>
     get("/models/embedding"),
 
-  getDetail: (modelId: number): Promise<unknown> =>
+  getDetail: (modelId: number): Promise<ModelConfig> =>
     get(`/models/${modelId}`),
 
-  create: (data: unknown): Promise<unknown> =>
+  create: (data: unknown): Promise<ModelConfig> =>
     post("/models", data),
 
-  update: (modelId: number, data: unknown): Promise<unknown> =>
+  update: (modelId: number, data: unknown): Promise<ModelConfig> =>
     put(`/models/${modelId}`, data),
 
   delete: (modelId: number): Promise<void> =>
     del(`/models/${modelId}`),
 
-  test: (modelId: number): Promise<unknown> =>
+  test: (modelId: number): Promise<{ success: boolean; message?: string }> =>
     post(`/models/${modelId}/test`),
 };

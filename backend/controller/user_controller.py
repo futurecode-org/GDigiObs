@@ -38,6 +38,17 @@ def list_users(
     return PaginatedResponse.success(data=paginated)
 
 
+# 个人中心相关接口
+@user_router.get("/me", summary="获取当前用户信息", deprecated=True)
+def get_me_redirect(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    获取当前用户信息（已迁移至 /api/v1/auth/me）
+    """
+    from service.auth_service import get_current_user_info
+    user_info = get_current_user_info(db, current_user)
+    return ApiResponse.success(data=user_info)
+
+
 @user_router.get("/{user_id}", summary="用户详情")
 def get_user(
     user_id: int,
@@ -119,14 +130,3 @@ def ban(
     """
     ban_user(db, user_id, ctx)
     return ApiResponse.success(message="用户已封禁")
-
-
-# 个人中心相关接口
-@user_router.get("/me", summary="获取当前用户信息", deprecated=True)
-def get_me_redirect(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """
-    获取当前用户信息（已迁移至 /api/v1/auth/me）
-    """
-    from service.auth_service import get_current_user_info
-    user_info = get_current_user_info(db, current_user)
-    return ApiResponse.success(data=user_info)
