@@ -8,6 +8,8 @@ import type {
   CollectTask,
   Conversation,
   CurrentUserResponse,
+  DifyApp,
+  DifyProvider,
   Friend,
   FriendApplication,
   Group,
@@ -616,4 +618,12 @@ export const modelApi = {
 
   test: (modelId: number): Promise<{ success: boolean; message?: string }> =>
     post(`/models/${modelId}/test`),
+};
+
+export const difyApi = {
+  getProviders: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<DifyProvider>> =>
+    get("/dify/providers", params),
+
+  getApps: (params?: { provider_id?: number; page?: number; page_size?: number }): Promise<PaginatedData<DifyApp>> =>
+    get("/dify/apps", params),
 };

@@ -45,3 +45,17 @@ class OperationLogListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class AskRecordCreate(BaseModel):
+    """智能问数创建请求"""
+    question: str = Field(..., min_length=1, description="问题")
+
+
+class AskRecordUpdate(BaseModel):
+    """智能问数更新请求"""
+    answer: Optional[str] = None
+    data_source: Optional[str] = None
+    chart_type: Optional[str] = None
+    chart_config: Optional[Dict] = None
+    result_data: Optional[Dict] = None

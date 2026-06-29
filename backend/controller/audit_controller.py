@@ -3,7 +3,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database.session import get_db
-from schema.audit import OperationLogResponse, AuditLogResponse, OperationLogListResponse
+from schema.audit import (
+    OperationLogResponse, AuditLogResponse, OperationLogListResponse,
+    AskRecordCreate, AskRecordUpdate
+)
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
 from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
 from service.audit_service import (
@@ -95,38 +98,24 @@ def get_ask_record(
 
 @ask_router.post("", summary="创建问数记录")
 def create_ask_record(
-    question: str,
+    data: AskRecordCreate,
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(get_request_context)
 ):
     """创建问数记录"""
-    result = create_ask_record_service(db, ctx, question)
+    result = create_ask_record_service(db, ctx, data.question)
     return ApiResponse.success(data=result)
 
 
 @ask_router.put("/{record_id}", summary="更新问数记录")
 def update_ask_record(
     record_id: int,
-    answer: str = None,
-    data_source: str = None,
-    chart_type: str = None,
-    chart_config: dict = None,
-    result_data: dict = None,
+    data: AskRecordUpdate,
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(get_request_context)
 ):
     """更新问数记录"""
-    update_data = {}
-    if answer is not None:
-        update_data["answer"] = answer
-    if data_source is not None:
-        update_data["data_source"] = data_source
-    if chart_type is not None:
-        update_data["chart_type"] = chart_type
-    if chart_config is not None:
-        update_data["chart_config"] = chart_config
-    if result_data is not None:
-        update_data["result_data"] = result_data
+    update_data = data.model_dump(exclude_unset=True)
     
     result = update_ask_record_service(db, ctx, record_id, **update_data)
     return ApiResponse.success(data=result)

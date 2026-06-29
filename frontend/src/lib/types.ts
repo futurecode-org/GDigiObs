@@ -421,6 +421,41 @@ export interface OperationLog {
   created_at: string;
 }
 
+export interface AuditLog {
+  id: number;
+  tenant_id?: number;
+  user_id?: number;
+  audit_type: string;
+  risk_level: string;
+  risk_tags?: string[];
+  content_summary?: string;
+  object_type?: string;
+  object_id?: number;
+  result?: unknown;
+  created_at: string;
+}
+
+export interface DifyProvider {
+  id: number;
+  name: string;
+  provider_type: string;
+  base_url: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DifyApp {
+  id: number;
+  provider_id: number;
+  name: string;
+  app_type: string;
+  api_endpoint: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type UserPage = 
   | "dashboard"
   | "messages"

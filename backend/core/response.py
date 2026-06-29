@@ -42,6 +42,11 @@ class PaginatedData(BaseModel, Generic[T]):
     page_size: int = Field(default=20, description="每页大小")
     total_pages: int = Field(default=0, description="总页数")
 
+    def __init__(self, **data: Any):
+        super().__init__(**data)
+        if self.page_size > 0 and self.total_pages == 0:
+            self.total_pages = (self.total + self.page_size - 1) // self.page_size
+
 
 class PaginatedResponse(ApiResponse[PaginatedData[T]]):
     """分页响应"""
