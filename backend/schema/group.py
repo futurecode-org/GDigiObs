@@ -103,3 +103,71 @@ class FriendWithUserInfoResponse(BaseModel):
     """好友列表响应（包含好友用户信息）"""
     friend_relation: FriendRelationResponse
     friend_user: dict  # 好友用户基本信息
+
+
+class GroupAnnouncementCreate(BaseModel):
+    """创建群公告请求"""
+    content: str = Field(..., max_length=2000, description="公告内容")
+
+
+class GroupAnnouncementResponse(BaseModel):
+    """群公告响应"""
+    id: int
+    group_id: int
+    content: str
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class GroupJoinApplicationCreate(BaseModel):
+    """创建入群申请请求"""
+    group_id: int = Field(..., description="群组ID")
+    message: Optional[str] = Field(None, max_length=255, description="申请理由")
+
+
+class GroupJoinApplicationResponse(BaseModel):
+    """入群申请响应"""
+    id: int
+    group_id: int
+    applicant_id: int
+    message: Optional[str] = None
+    status: str
+    handled_by: Optional[int] = None
+    handled_at: Optional[datetime] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class GroupInvitationCreate(BaseModel):
+    """创建群邀请请求"""
+    invitee_ids: List[int] = Field(..., description="被邀请用户ID列表")
+    message: Optional[str] = Field(None, max_length=255, description="邀请消息")
+    expires_in_hours: Optional[int] = Field(24, description="邀请有效期（小时）")
+
+
+class GroupInvitationResponse(BaseModel):
+    """群邀请响应"""
+    id: int
+    group_id: int
+    inviter_id: int
+    invitee_id: int
+    message: Optional[str] = None
+    status: str
+    expires_at: datetime
+    accepted_at: Optional[datetime] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class MuteMemberRequest(BaseModel):
+    """禁言群成员请求"""
+    user_ids: List[int] = Field(..., description="要禁言的用户ID列表")
+    mute_hours: int = Field(..., ge=1, le=168, description="禁言时长（小时，1-168）")

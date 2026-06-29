@@ -2,9 +2,9 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, desc
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from model.group import Group, GroupMember, FriendRelation, FriendApplication
+from model.group import Group, GroupMember, FriendRelation, FriendApplication, GroupAnnouncement, GroupJoinApplication, GroupInvitation
 from model.user import User
 
 
@@ -270,3 +270,234 @@ def reject_friend_application(db: Session, application_id: int, user_id: int) ->
     application.handled_at = datetime.now()
     db.commit()
     return True
+
+
+# 群公告管理
+def create_group_announcement(db: Session, group_id: int, content: str, creator_id: int) -> GroupAnnouncement:
+    """创建群公告"""
+    announcement = GroupAnnouncement(
+        group_id=group_id,
+        content=content,
+        creator_id=creator_id
+    )
+    db.add(announcement)
+    db.commit()
+    return announcement
+
+
+def get_group_announcements(db: Session, group_id: int) -> List[GroupAnnouncement]:
+    """获取群公告列表"""
+    return db.query(GroupAnnouncement).filter(
+        GroupAnnouncement.group_id == group_id,
+        GroupAnnouncement.status == "active"
+    ).order_by(desc(GroupAnnouncement.created_at)).all()
+
+
+def get_group_announcement(db: Session, announcement_id: int) -> Optional[GroupAnnouncement]:
+    """获取群公告详情"""
+    return db.query(GroupAnnouncement).filter(
+        GroupAnnouncement.id == announcement_id
+    ).first()
+
+
+def update_group_announcement(db: Session, announcement_id: int, content: str) -> bool:
+    """更新群公告"""
+    announcement = get_group_announcement(db, announcement_id)
+    if not announcement:
+        return False
+    
+    announcement.content = content
+    db.commit()
+    return True
+
+
+def deactivate_group_announcement(db: Session, announcement_id: int) -> bool:
+    """停用群公告"""
+    announcement = get_group_announcement(db, announcement_id)
+    if not announcement:
+        return False
+    
+    announcement.status = "inactive"
+    db.commit()
+    return True
+
+
+# 入群申请管理
+def create_group_join_application(db: Session, group_id: int, user_id: int, message: str = None) -> GroupJoinApplication:
+    """创建入群申请"""
+    application = GroupJoinApplication(
+        group_id=group_id,
+        user_id=user_id,
+        message=message
+    )
+    db.add(application)
+    db.commit()
+    return application
+
+
+def get_group_join_applications(db: Session, group_id: int, status: str = None) -> List[GroupJoinApplication]:
+    """获取群的入群申请列表"""
+    query = db.query(GroupJoinApplication).filter(
+        GroupJoinApplication.group_id == group_id
+    )
+    if status:
+        query = query.filter(GroupJoinApplication.status == status)
+    return query.order_by(desc(GroupJoinApplication.created_at)).all()
+
+
+def get_user_group_join_applications(db: Session, user_id: int) -> List[GroupJoinApplication]:
+    """获取用户的入群申请列表"""
+    return db.query(GroupJoinApplication).filter(
+        GroupJoinApplication.user_id == user_id
+    ).order_by(desc(GroupJoinApplication.created_at)).all()
+
+
+def get_group_join_application(db: Session, application_id: int) -> Optional[GroupJoinApplication]:
+    """获取入群申请详情"""
+    return db.query(GroupJoinApplication).filter(
+        GroupJoinApplication.id == application_id
+    ).first()
+
+
+def accept_group_join_application(db: Session, application_id: int, handled_by: int) -> bool:
+    """接受入群申请"""
+    application = get_group_join_application(db, application_id)
+    if not application or application.status != "pending":
+        return False
+    
+    application.status = "accepted"
+    application.handled_by = handled_by
+    application.handled_at = datetime.now()
+    
+    add_group_member(db, application.group_id, application.user_id)
+    
+    db.commit()
+    return True
+
+
+def reject_group_join_application(db: Session, application_id: int, handled_by: int) -> bool:
+    """拒绝入群申请"""
+    application = get_group_join_application(db, application_id)
+    if not application or application.status != "pending":
+        return False
+    
+    application.status = "rejected"
+    application.handled_by = handled_by
+    application.handled_at = datetime.now()
+    db.commit()
+    return True
+
+
+# 群邀请管理
+def create_group_invitation(db: Session, group_id: int, inviter_id: int, invitee_id: int, 
+                            message: str = None, expires_in_hours: int = 24) -> GroupInvitation:
+    """创建群邀请"""
+    invitation = GroupInvitation(
+        group_id=group_id,
+        inviter_id=inviter_id,
+        invitee_id=invitee_id,
+        message=message,
+        expires_at=datetime.now().replace(microsecond=0) + timedelta(hours=expires_in_hours)
+    )
+    db.add(invitation)
+    db.commit()
+    return invitation
+
+
+def get_group_invitations(db: Session, group_id: int) -> List[GroupInvitation]:
+    """获取群的邀请列表"""
+    return db.query(GroupInvitation).filter(
+        GroupInvitation.group_id == group_id
+    ).order_by(desc(GroupInvitation.created_at)).all()
+
+
+def get_user_group_invitations(db: Session, user_id: int) -> List[GroupInvitation]:
+    """获取用户收到的群邀请"""
+    now = datetime.now()
+    return db.query(GroupInvitation).filter(
+        GroupInvitation.invitee_id == user_id,
+        GroupInvitation.status == "pending",
+        or_(GroupInvitation.expires_at.is_(None), GroupInvitation.expires_at > now)
+    ).order_by(desc(GroupInvitation.created_at)).all()
+
+
+def get_group_invitation(db: Session, invitation_id: int) -> Optional[GroupInvitation]:
+    """获取群邀请详情"""
+    return db.query(GroupInvitation).filter(
+        GroupInvitation.id == invitation_id
+    ).first()
+
+
+def accept_group_invitation(db: Session, invitation_id: int, user_id: int) -> bool:
+    """接受群邀请"""
+    invitation = get_group_invitation(db, invitation_id)
+    if not invitation or invitation.status != "pending" or invitation.invitee_id != user_id:
+        return False
+    
+    now = datetime.now()
+    if invitation.expires_at and invitation.expires_at <= now:
+        invitation.status = "expired"
+        db.commit()
+        return False
+    
+    invitation.status = "accepted"
+    invitation.accepted_at = now
+    
+    add_group_member(db, invitation.group_id, user_id)
+    
+    db.commit()
+    return True
+
+
+def reject_group_invitation(db: Session, invitation_id: int, user_id: int) -> bool:
+    """拒绝群邀请"""
+    invitation = get_group_invitation(db, invitation_id)
+    if not invitation or invitation.status != "pending" or invitation.invitee_id != user_id:
+        return False
+    
+    invitation.status = "rejected"
+    db.commit()
+    return True
+
+
+def expire_group_invitation(db: Session, invitation_id: int) -> bool:
+    """过期群邀请"""
+    invitation = get_group_invitation(db, invitation_id)
+    if not invitation:
+        return False
+    
+    invitation.status = "expired"
+    db.commit()
+    return True
+
+
+# 群禁言管理
+def mute_group_member(db: Session, group_id: int, user_id: int, mute_hours: int) -> bool:
+    """禁言群成员"""
+    member = get_group_member(db, group_id, user_id)
+    if not member:
+        return False
+    
+    member.muted_until = datetime.now() + timedelta(hours=mute_hours)
+    db.commit()
+    return True
+
+
+def unmute_group_member(db: Session, group_id: int, user_id: int) -> bool:
+    """解除群成员禁言"""
+    member = get_group_member(db, group_id, user_id)
+    if not member:
+        return False
+    
+    member.muted_until = None
+    db.commit()
+    return True
+
+
+def is_group_member_muted(db: Session, group_id: int, user_id: int) -> bool:
+    """检查群成员是否被禁言"""
+    member = get_group_member(db, group_id, user_id)
+    if not member or not member.muted_until:
+        return False
+    
+    return member.muted_until > datetime.now()

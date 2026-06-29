@@ -10,12 +10,19 @@ from dao.group_dao import (
     leave_group, update_group_member_role, update_group_info, dissolve_group,
     get_friend_relation, get_user_friends, create_friend_relation,
     delete_friend_relation, create_friend_application, get_friend_application,
-    get_user_friend_applications, accept_friend_application, reject_friend_application
+    get_user_friend_applications, accept_friend_application, reject_friend_application,
+    create_group_announcement, get_group_announcements, get_group_announcement,
+    update_group_announcement, deactivate_group_announcement,
+    create_group_join_application, get_group_join_applications, get_user_group_join_applications,
+    get_group_join_application, accept_group_join_application, reject_group_join_application,
+    create_group_invitation, get_group_invitations, get_user_group_invitations,
+    get_group_invitation, accept_group_invitation, reject_group_invitation,
+    mute_group_member, unmute_group_member, is_group_member_muted
 )
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from model.user import User
-from model.group import Group
+from model.group import Group, GroupJoinApplication, GroupInvitation
 
 logger = logging.getLogger(__name__)
 
@@ -329,3 +336,315 @@ def delete_friend_service(db: Session, current_user: User, friend_user_id: int):
         raise NotFoundException("好友关系不存在")
     
     logger.info(f"删除好友: user_id={current_user.id}, friend_id={friend_user_id}")
+
+
+# 群公告服务
+def create_group_announcement_service(db: Session, current_user: User, group_id: int, content: str):
+    """创建群公告"""
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise NotFoundException("群组不存在")
+    
+    current_member = get_group_member(db, group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("只有群主和管理员可以发布公告")
+    
+    announcement = create_group_announcement(db, group_id, content, current_user.id)
+    logger.info(f"创建群公告: group_id={group_id}, creator_id={current_user.id}")
+    return {
+        "id": announcement.id,
+        "content": announcement.content,
+        "creator_id": announcement.creator_id,
+        "created_at": announcement.created_at
+    }
+
+
+def get_group_announcements_service(db: Session, current_user: User, group_id: int) -> List[Dict]:
+    """获取群公告列表"""
+    if not is_group_member(db, group_id, current_user.id):
+        raise ForbiddenException("无权访问此群组")
+    
+    announcements = get_group_announcements(db, group_id)
+    result = []
+    for announcement in announcements:
+        creator = get_user_by_id(db, announcement.creator_id)
+        result.append({
+            "id": announcement.id,
+            "content": announcement.content,
+            "creator": {
+                "id": creator.id,
+                "username": creator.username,
+                "nickname": creator.nickname
+            },
+            "created_at": announcement.created_at
+        })
+    return result
+
+
+def update_group_announcement_service(db: Session, current_user: User, announcement_id: int, content: str):
+    """更新群公告"""
+    announcement = get_group_announcement(db, announcement_id)
+    if not announcement:
+        raise NotFoundException("公告不存在")
+    
+    current_member = get_group_member(db, announcement.group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("只有群主和管理员可以更新公告")
+    
+    success = update_group_announcement(db, announcement_id, content)
+    if not success:
+        raise NotFoundException("公告不存在")
+    
+    logger.info(f"更新群公告: announcement_id={announcement_id}")
+
+
+def deactivate_group_announcement_service(db: Session, current_user: User, announcement_id: int):
+    """停用群公告"""
+    announcement = get_group_announcement(db, announcement_id)
+    if not announcement:
+        raise NotFoundException("公告不存在")
+    
+    current_member = get_group_member(db, announcement.group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("只有群主和管理员可以停用公告")
+    
+    success = deactivate_group_announcement(db, announcement_id)
+    if not success:
+        raise NotFoundException("公告不存在")
+    
+    logger.info(f"停用群公告: announcement_id={announcement_id}")
+
+
+# 入群申请服务
+def apply_group_join_service(db: Session, current_user: User, group_id: int, message: str = None):
+    """申请入群"""
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise NotFoundException("群组不存在")
+    
+    if group.status != "normal":
+        raise ForbiddenException("群组状态异常")
+    
+    if is_group_member(db, group_id, current_user.id):
+        raise BadRequestException("已是群成员")
+    
+    if group.join_mode == "invite_only":
+        raise ForbiddenException("该群组只允许邀请入群")
+    
+    existing = db.query(GroupJoinApplication).filter(
+        GroupJoinApplication.group_id == group_id,
+        GroupJoinApplication.user_id == current_user.id,
+        GroupJoinApplication.status == "pending"
+    ).first()
+    if existing:
+        raise BadRequestException("已有待处理的入群申请")
+    
+    create_group_join_application(db, group_id, current_user.id, message)
+    logger.info(f"申请入群: user_id={current_user.id}, group_id={group_id}")
+
+
+def get_group_join_applications_service(db: Session, current_user: User, group_id: int) -> List[Dict]:
+    """获取群的入群申请列表"""
+    current_member = get_group_member(db, group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("只有群主和管理员可以查看入群申请")
+    
+    applications = get_group_join_applications(db, group_id, "pending")
+    result = []
+    for app in applications:
+        user = get_user_by_id(db, app.user_id)
+        result.append({
+            "id": app.id,
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "nickname": user.nickname,
+                "avatar_file_id": user.avatar_file_id
+            },
+            "message": app.message,
+            "created_at": app.created_at
+        })
+    return result
+
+
+def get_user_group_join_applications_service(db: Session, current_user: User) -> List[Dict]:
+    """获取用户的入群申请列表"""
+    applications = get_user_group_join_applications(db, current_user.id)
+    result = []
+    for app in applications:
+        group = get_group_by_id(db, app.group_id)
+        if group:
+            result.append({
+                "id": app.id,
+                "group": {
+                    "id": group.id,
+                    "name": group.name,
+                    "avatar_file_id": group.avatar_file_id
+                },
+                "message": app.message,
+                "status": app.status,
+                "created_at": app.created_at,
+                "handled_at": app.handled_at
+            })
+    return result
+
+
+def accept_group_join_application_service(db: Session, current_user: User, application_id: int):
+    """接受入群申请"""
+    application = get_group_join_application(db, application_id)
+    if not application:
+        raise NotFoundException("申请不存在")
+    
+    current_member = get_group_member(db, application.group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("只有群主和管理员可以处理入群申请")
+    
+    success = accept_group_join_application(db, application_id, current_user.id)
+    if not success:
+        raise BadRequestException("申请状态异常")
+    
+    logger.info(f"接受入群申请: application_id={application_id}")
+
+
+def reject_group_join_application_service(db: Session, current_user: User, application_id: int):
+    """拒绝入群申请"""
+    application = get_group_join_application(db, application_id)
+    if not application:
+        raise NotFoundException("申请不存在")
+    
+    current_member = get_group_member(db, application.group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("只有群主和管理员可以处理入群申请")
+    
+    success = reject_group_join_application(db, application_id, current_user.id)
+    if not success:
+        raise BadRequestException("申请状态异常")
+    
+    logger.info(f"拒绝入群申请: application_id={application_id}")
+
+
+# 群邀请服务
+def invite_to_group_service(db: Session, current_user: User, group_id: int, invitee_id: int, message: str = None):
+    """邀请用户进群"""
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise NotFoundException("群组不存在")
+    
+    current_member = get_group_member(db, group_id, current_user.id)
+    if not current_member:
+        raise ForbiddenException("不是群成员")
+    
+    if current_member.role not in ["owner", "admin"] and not group.allow_member_invite:
+        raise ForbiddenException("群组不允许成员邀请")
+    
+    invitee = get_user_by_id(db, invitee_id)
+    if not invitee:
+        raise NotFoundException("被邀请用户不存在")
+    
+    if invitee.tenant_id != group.tenant_id:
+        raise ForbiddenException("无法邀请非同租户用户")
+    
+    if is_group_member(db, group_id, invitee_id):
+        raise BadRequestException("已是群成员")
+    
+    existing = db.query(GroupInvitation).filter(
+        GroupInvitation.group_id == group_id,
+        GroupInvitation.invitee_id == invitee_id,
+        GroupInvitation.status == "pending"
+    ).first()
+    if existing:
+        raise BadRequestException("已有待处理的邀请")
+    
+    invitation = create_group_invitation(db, group_id, current_user.id, invitee_id, message)
+    logger.info(f"邀请进群: inviter_id={current_user.id}, invitee_id={invitee_id}, group_id={group_id}")
+    return {
+        "id": invitation.id,
+        "expires_at": invitation.expires_at
+    }
+
+
+def get_user_group_invitations_service(db: Session, current_user: User) -> List[Dict]:
+    """获取用户收到的群邀请"""
+    invitations = get_user_group_invitations(db, current_user.id)
+    result = []
+    for invite in invitations:
+        group = get_group_by_id(db, invite.group_id)
+        inviter = get_user_by_id(db, invite.inviter_id)
+        if group and inviter:
+            result.append({
+                "id": invite.id,
+                "group": {
+                    "id": group.id,
+                    "name": group.name,
+                    "avatar_file_id": group.avatar_file_id
+                },
+                "inviter": {
+                    "id": inviter.id,
+                    "username": inviter.username,
+                    "nickname": inviter.nickname
+                },
+                "message": invite.message,
+                "expires_at": invite.expires_at,
+                "created_at": invite.created_at
+            })
+    return result
+
+
+def accept_group_invitation_service(db: Session, current_user: User, invitation_id: int):
+    """接受群邀请"""
+    success = accept_group_invitation(db, invitation_id, current_user.id)
+    if not success:
+        raise BadRequestException("邀请不存在或已过期")
+    
+    logger.info(f"接受群邀请: user_id={current_user.id}, invitation_id={invitation_id}")
+
+
+def reject_group_invitation_service(db: Session, current_user: User, invitation_id: int):
+    """拒绝群邀请"""
+    success = reject_group_invitation(db, invitation_id, current_user.id)
+    if not success:
+        raise NotFoundException("邀请不存在")
+    
+    logger.info(f"拒绝群邀请: user_id={current_user.id}, invitation_id={invitation_id}")
+
+
+# 群禁言服务
+def mute_group_member_service(db: Session, current_user: User, group_id: int, user_id: int, mute_hours: int):
+    """禁言群成员"""
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise NotFoundException("群组不存在")
+    
+    current_member = get_group_member(db, group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("只有群主和管理员可以禁言成员")
+    
+    target_member = get_group_member(db, group_id, user_id)
+    if not target_member:
+        raise NotFoundException("成员不存在")
+    
+    if target_member.role == "owner":
+        raise ForbiddenException("不能禁言群主")
+    
+    success = mute_group_member(db, group_id, user_id, mute_hours)
+    if not success:
+        raise NotFoundException("成员不存在")
+    
+    logger.info(f"禁言群成员: group_id={group_id}, user_id={user_id}, mute_hours={mute_hours}")
+
+
+def unmute_group_member_service(db: Session, current_user: User, group_id: int, user_id: int):
+    """解除群成员禁言"""
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise NotFoundException("群组不存在")
+    
+    current_member = get_group_member(db, group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("只有群主和管理员可以解除禁言")
+    
+    success = unmute_group_member(db, group_id, user_id)
+    if not success:
+        raise NotFoundException("成员不存在")
+    
+    logger.info(f"解除群成员禁言: group_id={group_id}, user_id={user_id}")

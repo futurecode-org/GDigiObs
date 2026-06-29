@@ -101,7 +101,8 @@ def update_conversation_last_message(db: Session, conversation_id: int, message_
 
 
 def create_message(db: Session, tenant_id: int, conversation_id: int, sender_id: int,
-                   message_type: str, content: str = None, file_id: int = None) -> Message:
+                   message_type: str, content: str = None, file_id: int = None,
+                   audit_status: str = "passed", risk_level: str = "none", risk_tags: list = None) -> Message:
     """创建消息"""
     message = Message(
         tenant_id=tenant_id,
@@ -109,7 +110,10 @@ def create_message(db: Session, tenant_id: int, conversation_id: int, sender_id:
         sender_id=sender_id,
         message_type=message_type,
         content=content,
-        file_id=file_id
+        file_id=file_id,
+        audit_status=audit_status,
+        risk_level=risk_level,
+        risk_tags=risk_tags or []
     )
     db.add(message)
     db.flush()
@@ -125,6 +129,23 @@ def create_message(db: Session, tenant_id: int, conversation_id: int, sender_id:
     
     db.commit()
     return message
+
+
+def update_message_audit_result(db: Session, message_id: int, audit_status: str, 
+                                risk_level: str = None, risk_tags: list = None):
+    """更新消息审计结果"""
+    message = db.query(Message).filter(Message.id == message_id).first()
+    if not message:
+        return False
+    
+    message.audit_status = audit_status
+    if risk_level:
+        message.risk_level = risk_level
+    if risk_tags:
+        message.risk_tags = risk_tags
+    
+    db.commit()
+    return True
 
 
 def get_conversation_messages(db: Session, conversation_id: int, page: int = 1, 

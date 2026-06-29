@@ -8,13 +8,16 @@ from dao.conversation_dao import (
     get_conversation_by_id, get_conversation_members, is_conversation_member,
     create_message, get_conversation_messages, mark_messages_as_read,
     recall_message, hide_conversation, pin_conversation, mute_conversation,
-    get_conversation_member
+    get_conversation_member, update_message_audit_result
 )
+from dao.group_dao import is_group_member_muted, get_group_member
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from core.message_auditor import audit_message
+from core.ws_manager import broadcast_message_new, broadcast_message_recalled, broadcast_message_read, broadcast_conversation_updated
+from dao.conversation_dao import get_conversation_members
 from model.user import User
-from model.conversation import Conversation
+from model.conversation import Conversation, Message
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +161,11 @@ def send_message(db: Session, current_user: User, conversation_id: int,
     if not is_conversation_member(db, conversation_id, current_user.id):
         raise ForbiddenException("无权在此会话发送消息")
     
+    # 群聊时检查禁言状态
+    if conversation.type == "group" and conversation.group_id:
+        if is_group_member_muted(db, conversation.group_id, current_user.id):
+            raise ForbiddenException("您已被禁言，无法发送消息")
+    
     # 文本消息审计
     audit_result = None
     if message_type == "text" and content:
@@ -167,13 +175,29 @@ def send_message(db: Session, current_user: User, conversation_id: int,
             logger.warning(f"消息被拦截: user_id={current_user.id}, reason={audit_result.blocked_reason}")
             raise BadRequestException(f"消息内容不符合规范: {audit_result.blocked_reason}")
     
+    # 确定审计状态
+    audit_status = "passed"
+    risk_level = "none"
+    risk_tags = []
+    if audit_result:
+        if audit_result.audit_action == "review":
+            audit_status = "reviewing"
+        else:
+            audit_status = "passed"
+        risk_level = audit_result.risk_level
+        risk_tags = audit_result.risk_tags
+    
     # 创建消息
     message = create_message(
         db, current_user.tenant_id, conversation_id, current_user.id,
-        message_type, content, file_id
+        message_type, content, file_id, audit_status, risk_level, risk_tags
     )
     
     logger.info(f"用户发送消息: user_id={current_user.id}, conversation_id={conversation_id}")
+    
+    # 获取会话成员列表（排除发送者）用于推送
+    members = get_conversation_members(db, conversation_id)
+    recipient_user_ids = [m.user_id for m in members if m.user_id != current_user.id]
     
     result = {
         "id": message.id,
@@ -181,12 +205,12 @@ def send_message(db: Session, current_user: User, conversation_id: int,
         "sender_id": message.sender_id,
         "message_type": message.message_type,
         "content": message.content,
-        "created_at": message.created_at
+        "created_at": message.created_at,
+        "audit_status": message.audit_status,
+        "risk_level": message.risk_level,
+        "risk_tags": message.risk_tags,
+        "recipient_user_ids": recipient_user_ids
     }
-    
-    if audit_result and audit_result.audit_action == "review":
-        result["audit_status"] = "pending_review"
-        result["risk_level"] = audit_result.risk_level
     
     return result
 
@@ -221,19 +245,45 @@ def get_messages(db: Session, current_user: User, conversation_id: int,
     }
 
 
-def mark_as_read(db: Session, current_user: User, conversation_id: int):
+def mark_as_read(db: Session, current_user: User, conversation_id: int) -> Dict:
     """标记消息已读"""
     if not is_conversation_member(db, conversation_id, current_user.id):
         raise ForbiddenException("无权访问此会话")
     
     mark_messages_as_read(db, conversation_id, current_user.id)
+    
+    # 获取会话成员列表（排除当前用户）用于推送
+    members = get_conversation_members(db, conversation_id)
+    recipient_user_ids = [m.user_id for m in members if m.user_id != current_user.id]
+    
+    return {
+        "conversation_id": conversation_id,
+        "user_id": current_user.id,
+        "recipient_user_ids": recipient_user_ids
+    }
 
 
-def recall_message_service(db: Session, current_user: User, message_id: int):
+def recall_message_service(db: Session, current_user: User, message_id: int) -> Dict:
     """撤回消息"""
+    message = db.query(Message).filter(Message.id == message_id).first()
+    if not message:
+        raise BadRequestException("消息不存在")
+    
+    conversation_id = message.conversation_id
+    
     success = recall_message(db, message_id, current_user.id)
     if not success:
         raise BadRequestException("消息不存在或已超过撤回时间限制")
+    
+    # 获取会话成员列表（排除当前用户）用于推送
+    members = get_conversation_members(db, conversation_id)
+    recipient_user_ids = [m.user_id for m in members if m.user_id != current_user.id]
+    
+    return {
+        "message_id": message_id,
+        "conversation_id": conversation_id,
+        "recipient_user_ids": recipient_user_ids
+    }
 
 
 def update_conversation_settings(db: Session, current_user: User, conversation_id: int,

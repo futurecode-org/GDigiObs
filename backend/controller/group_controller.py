@@ -7,7 +7,9 @@ from database.session import get_db
 from schema.group import (
     GroupCreate, GroupUpdate, GroupResponse, GroupMemberCreate,
     GroupWithMembersResponse, FriendApplicationCreate,
-    FriendApplicationResponse, FriendWithUserInfoResponse
+    FriendApplicationResponse, FriendWithUserInfoResponse,
+    GroupAnnouncementCreate, GroupJoinApplicationCreate,
+    GroupInvitationCreate, MuteMemberRequest
 )
 from core.response import ApiResponse
 from core.dependencies import get_current_user
@@ -17,7 +19,15 @@ from service.group_service import (
     leave_group_service, update_group_service, set_group_admin,
     dissolve_group_service, get_friends_service, apply_friend_service,
     get_friend_applications_service, accept_friend_application_service,
-    reject_friend_application_service, delete_friend_service
+    reject_friend_application_service, delete_friend_service,
+    create_group_announcement_service, get_group_announcements_service,
+    update_group_announcement_service, deactivate_group_announcement_service,
+    apply_group_join_service, get_group_join_applications_service,
+    get_user_group_join_applications_service, accept_group_join_application_service,
+    reject_group_join_application_service, invite_to_group_service,
+    get_user_group_invitations_service, accept_group_invitation_service,
+    reject_group_invitation_service, mute_group_member_service,
+    unmute_group_member_service
 )
 
 from model.user import User
@@ -170,6 +180,238 @@ def dissolve_group(
     """
     dissolve_group_service(db, current_user, group_id)
     return ApiResponse.success(message="群组已解散")
+
+
+# 群公告管理
+@group_router.post("/{group_id}/announcements", summary="发布群公告")
+def create_announcement(
+    group_id: int,
+    data: GroupAnnouncementCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    发布群公告
+    
+    - 只有群主和管理员可以发布
+    """
+    result = create_group_announcement_service(db, current_user, group_id, data.content)
+    return ApiResponse.success(data=result)
+
+
+@group_router.get("/{group_id}/announcements", summary="获取群公告列表")
+def list_announcements(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取群公告列表
+    
+    - 只有群成员可以查看
+    """
+    result = get_group_announcements_service(db, current_user, group_id)
+    return ApiResponse.success(data=result)
+
+
+@group_router.put("/announcements/{announcement_id}", summary="更新群公告")
+def update_announcement(
+    announcement_id: int,
+    data: GroupAnnouncementCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    更新群公告
+    
+    - 只有群主和管理员可以更新
+    """
+    update_group_announcement_service(db, current_user, announcement_id, data.content)
+    return ApiResponse.success(message="公告已更新")
+
+
+@group_router.delete("/announcements/{announcement_id}", summary="停用群公告")
+def deactivate_announcement(
+    announcement_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    停用群公告
+    
+    - 只有群主和管理员可以停用
+    """
+    deactivate_group_announcement_service(db, current_user, announcement_id)
+    return ApiResponse.success(message="公告已停用")
+
+
+# 入群申请管理
+@group_router.post("/{group_id}/join-apply", summary="申请入群")
+def apply_join(
+    group_id: int,
+    data: GroupJoinApplicationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    申请入群
+    
+    - 非邀请制群组可申请入群
+    - 已在群内或有待处理申请时不可重复申请
+    """
+    apply_group_join_service(db, current_user, group_id, data.message)
+    return ApiResponse.success(message="入群申请已提交")
+
+
+@group_router.get("/{group_id}/join-applications", summary="获取群的入群申请")
+def list_join_applications(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取群的入群申请列表
+    
+    - 只有群主和管理员可以查看
+    """
+    result = get_group_join_applications_service(db, current_user, group_id)
+    return ApiResponse.success(data=result)
+
+
+@group_router.get("/join-applications", summary="获取我的入群申请")
+def list_my_join_applications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取用户的入群申请列表
+    """
+    result = get_user_group_join_applications_service(db, current_user)
+    return ApiResponse.success(data=result)
+
+
+@group_router.post("/join-applications/{application_id}/accept", summary="接受入群申请")
+def accept_join_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    接受入群申请
+    
+    - 只有群主和管理员可以处理
+    """
+    accept_group_join_application_service(db, current_user, application_id)
+    return ApiResponse.success(message="已接受入群申请")
+
+
+@group_router.post("/join-applications/{application_id}/reject", summary="拒绝入群申请")
+def reject_join_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    拒绝入群申请
+    
+    - 只有群主和管理员可以处理
+    """
+    reject_group_join_application_service(db, current_user, application_id)
+    return ApiResponse.success(message="已拒绝入群申请")
+
+
+# 群邀请管理
+@group_router.post("/{group_id}/invite", summary="邀请用户进群")
+def invite_user(
+    group_id: int,
+    data: GroupInvitationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    邀请用户进群
+    
+    - 群成员可邀请（取决于群组设置）
+    - 被邀请人必须同租户
+    """
+    results = []
+    for invitee_id in data.invitee_ids:
+        result = invite_to_group_service(db, current_user, group_id, invitee_id, data.message)
+        results.append(result)
+    return ApiResponse.success(data=results)
+
+
+@group_router.get("/invitations", summary="获取收到的群邀请")
+def list_invitations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取用户收到的群邀请列表
+    """
+    result = get_user_group_invitations_service(db, current_user)
+    return ApiResponse.success(data=result)
+
+
+@group_router.post("/invitations/{invitation_id}/accept", summary="接受群邀请")
+def accept_invitation(
+    invitation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    接受群邀请
+    """
+    accept_group_invitation_service(db, current_user, invitation_id)
+    return ApiResponse.success(message="已接受群邀请")
+
+
+@group_router.post("/invitations/{invitation_id}/reject", summary="拒绝群邀请")
+def reject_invitation(
+    invitation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    拒绝群邀请
+    """
+    reject_group_invitation_service(db, current_user, invitation_id)
+    return ApiResponse.success(message="已拒绝群邀请")
+
+
+# 群禁言管理
+@group_router.post("/{group_id}/mute", summary="禁言群成员")
+def mute_member(
+    group_id: int,
+    data: MuteMemberRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    禁言群成员
+    
+    - 只有群主和管理员可以禁言
+    - 不能禁言群主
+    """
+    for user_id in data.user_ids:
+        mute_group_member_service(db, current_user, group_id, user_id, data.mute_hours)
+    return ApiResponse.success(message="成员已被禁言")
+
+
+@group_router.post("/{group_id}/members/{user_id}/unmute", summary="解除群成员禁言")
+def unmute_member(
+    group_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    解除群成员禁言
+    
+    - 只有群主和管理员可以解除禁言
+    """
+    unmute_group_member_service(db, current_user, group_id, user_id)
+    return ApiResponse.success(message="已解除禁言")
 
 
 # 好友管理

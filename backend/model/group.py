@@ -51,3 +51,38 @@ class FriendApplication(Base, BaseModelMixin):
     message = Column(String(255), nullable=True, comment="验证消息")
     status = Column(String(20), default="pending", comment="状态: pending/accepted/rejected/expired/canceled")
     handled_at = Column(DateTime, nullable=True, comment="处理时间")
+
+
+class GroupAnnouncement(Base, BaseModelMixin):
+    """群公告表"""
+    __tablename__ = "group_announcements"
+    
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False, index=True, comment="群ID")
+    content = Column(Text, nullable=False, comment="公告内容")
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="创建者ID")
+    status = Column(String(20), default="active", comment="状态: active/inactive")
+
+
+class GroupJoinApplication(Base, BaseModelMixin):
+    """入群申请表"""
+    __tablename__ = "group_join_applications"
+    
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False, index=True, comment="群ID")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True, comment="申请人ID")
+    message = Column(String(255), nullable=True, comment="申请理由")
+    status = Column(String(20), default="pending", comment="状态: pending/accepted/rejected")
+    handled_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="处理人ID")
+    handled_at = Column(DateTime, nullable=True, comment="处理时间")
+
+
+class GroupInvitation(Base, BaseModelMixin):
+    """群邀请表"""
+    __tablename__ = "group_invitations"
+    
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False, index=True, comment="群ID")
+    inviter_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="邀请人ID")
+    invitee_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True, comment="被邀请人ID")
+    message = Column(String(255), nullable=True, comment="邀请消息")
+    status = Column(String(20), default="pending", comment="状态: pending/accepted/rejected/expired")
+    expires_at = Column(DateTime, nullable=True, comment="过期时间")
+    accepted_at = Column(DateTime, nullable=True, comment="接受时间")

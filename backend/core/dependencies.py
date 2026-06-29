@@ -149,3 +149,40 @@ def require_admin():
         raise ForbiddenException("需要管理员权限")
     
     return Depends(admin_checker)
+
+
+async def get_user_from_token(token: str) -> Optional[User]:
+    """从Token获取用户（用于WebSocket等非HTTP请求）"""
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        
+        if payload.get("type") != "access":
+            return None
+        
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        
+        db_gen = get_db()
+        db = None
+        try:
+            db = next(db_gen)
+            user = get_user_by_id(db, int(user_id))
+            if not user:
+                return None
+            
+            if user.status == UserStatus.DISABLED or user.status == UserStatus.BANNED:
+                return None
+            
+            return user
+        except StopIteration:
+            return None
+        finally:
+            if db:
+                db.close()
+            try:
+                db_gen.close()
+            except Exception:
+                pass
+    except (JWTError, Exception):
+        return None

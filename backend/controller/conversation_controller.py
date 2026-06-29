@@ -1,5 +1,5 @@
 """会话管理控制器"""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from database.session import get_db
@@ -14,6 +14,7 @@ from service.conversation_service import (
     send_message, get_messages, mark_as_read, recall_message_service,
     update_conversation_settings
 )
+from core.ws_manager import broadcast_message_new, broadcast_message_recalled, broadcast_message_read, broadcast_conversation_updated
 
 from model.user import User
 
@@ -72,6 +73,7 @@ def get_conversation(
 def send_message_endpoint(
     conversation_id: int,
     data: MessageCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -85,6 +87,16 @@ def send_message_endpoint(
         db, current_user, conversation_id,
         data.message_type, data.content, data.file_id
     )
+    
+    # 通过BackgroundTasks异步推送WebSocket消息
+    recipient_user_ids = result.pop("recipient_user_ids", [])
+    background_tasks.add_task(
+        broadcast_message_new, conversation_id, result["id"], recipient_user_ids
+    )
+    background_tasks.add_task(
+        broadcast_conversation_updated, conversation_id, recipient_user_ids
+    )
+    
     return ApiResponse.success(data=result)
 
 
@@ -109,6 +121,7 @@ def get_messages_endpoint(
 @conversation_router.post("/{conversation_id}/read", summary="标记已读")
 def mark_read(
     conversation_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -118,13 +131,20 @@ def mark_read(
     - 清除未读计数
     - 更新最后已读消息ID
     """
-    mark_as_read(db, current_user, conversation_id)
+    result = mark_as_read(db, current_user, conversation_id)
+    
+    # 通过BackgroundTasks异步推送WebSocket消息
+    background_tasks.add_task(
+        broadcast_message_read, conversation_id, result["user_id"], result["recipient_user_ids"]
+    )
+    
     return ApiResponse.success(message="已标记为已读")
 
 
 @conversation_router.post("/messages/{message_id}/recall", summary="撤回消息")
 def recall_message_endpoint(
     message_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -134,7 +154,13 @@ def recall_message_endpoint(
     - 只能撤回自己发送的消息
     - 撤回时间限制为2分钟
     """
-    recall_message_service(db, current_user, message_id)
+    result = recall_message_service(db, current_user, message_id)
+    
+    # 通过BackgroundTasks异步推送WebSocket消息
+    background_tasks.add_task(
+        broadcast_message_recalled, result["message_id"], result["recipient_user_ids"]
+    )
+    
     return ApiResponse.success(message="消息已撤回")
 
 
