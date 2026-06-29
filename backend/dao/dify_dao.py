@@ -2,14 +2,13 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
 from typing import List, Optional, Dict
-from datetime import datetime
 
 from model.dify import DifyProvider, DifyApp, DifyConversation, DifyCallLog, ChatAssistant
 
 
 def get_dify_providers(db: Session, tenant_id: int = None, page: int = 1, page_size: int = 20) -> List[DifyProvider]:
     """获取 Dify Provider 列表"""
-    query = db.query(DifyProvider).filter(DifyProvider.deleted_at == None)
+    query = db.query(DifyProvider).filter(DifyProvider.status != "deleted")
     
     if tenant_id:
         query = query.filter(or_(
@@ -24,7 +23,7 @@ def get_dify_provider_by_id(db: Session, provider_id: int) -> Optional[DifyProvi
     """获取 Dify Provider 详情"""
     return db.query(DifyProvider).filter(
         DifyProvider.id == provider_id,
-        DifyProvider.deleted_at == None
+        DifyProvider.status != "deleted"
     ).first()
 
 
@@ -56,14 +55,14 @@ def delete_dify_provider(db: Session, provider_id: int) -> bool:
     if not provider:
         return False
     
-    provider.deleted_at = datetime.now()
+    provider.status = "deleted"
     db.commit()
     return True
 
 
 def count_dify_providers(db: Session, tenant_id: int = None) -> int:
     """统计 Dify Provider 数量"""
-    query = db.query(DifyProvider).filter(DifyProvider.deleted_at == None)
+    query = db.query(DifyProvider).filter(DifyProvider.status != "deleted")
     
     if tenant_id:
         query = query.filter(or_(
@@ -76,7 +75,7 @@ def count_dify_providers(db: Session, tenant_id: int = None) -> int:
 
 def get_dify_apps(db: Session, tenant_id: int = None, app_type: str = None, page: int = 1, page_size: int = 20) -> List[DifyApp]:
     """获取 Dify App 列表"""
-    query = db.query(DifyApp).filter(DifyApp.deleted_at == None)
+    query = db.query(DifyApp).filter(DifyApp.status != "deleted")
     
     if tenant_id:
         query = query.filter(or_(
@@ -95,7 +94,7 @@ def get_dify_app_by_id(db: Session, app_id: int) -> Optional[DifyApp]:
     """获取 Dify App 详情"""
     return db.query(DifyApp).filter(
         DifyApp.id == app_id,
-        DifyApp.deleted_at == None
+        DifyApp.status != "deleted"
     ).first()
 
 
@@ -127,14 +126,14 @@ def delete_dify_app(db: Session, app_id: int) -> bool:
     if not app:
         return False
     
-    app.deleted_at = datetime.now()
+    app.status = "deleted"
     db.commit()
     return True
 
 
 def count_dify_apps(db: Session, tenant_id: int = None, app_type: str = None) -> int:
     """统计 Dify App 数量"""
-    query = db.query(DifyApp).filter(DifyApp.deleted_at == None)
+    query = db.query(DifyApp).filter(DifyApp.status != "deleted")
     
     if tenant_id:
         query = query.filter(or_(
@@ -234,7 +233,7 @@ def create_dify_call_log(db: Session, **kwargs) -> DifyCallLog:
 
 def get_chat_assistants(db: Session, tenant_id: int = None, page: int = 1, page_size: int = 20) -> List[ChatAssistant]:
     """获取聊天助手列表"""
-    query = db.query(ChatAssistant).filter(ChatAssistant.deleted_at == None)
+    query = db.query(ChatAssistant).filter(ChatAssistant.status != "deleted")
     
     if tenant_id:
         query = query.filter(or_(
@@ -249,7 +248,7 @@ def get_chat_assistant_by_id(db: Session, assistant_id: int) -> Optional[ChatAss
     """获取聊天助手详情"""
     return db.query(ChatAssistant).filter(
         ChatAssistant.id == assistant_id,
-        ChatAssistant.deleted_at == None
+        ChatAssistant.status != "deleted"
     ).first()
 
 
@@ -281,14 +280,14 @@ def delete_chat_assistant(db: Session, assistant_id: int) -> bool:
     if not assistant:
         return False
     
-    assistant.deleted_at = datetime.now()
+    assistant.status = "deleted"
     db.commit()
     return True
 
 
 def count_chat_assistants(db: Session, tenant_id: int = None) -> int:
     """统计聊天助手数量"""
-    query = db.query(ChatAssistant).filter(ChatAssistant.deleted_at == None)
+    query = db.query(ChatAssistant).filter(ChatAssistant.status != "deleted")
     
     if tenant_id:
         query = query.filter(or_(
