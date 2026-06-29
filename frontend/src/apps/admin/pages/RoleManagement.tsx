@@ -16,11 +16,16 @@ export function RoleManagement() {
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
 
+  const normalizeRole = (role: Role) => ({
+    ...role,
+    permissions: Array.isArray(role.permissions) ? role.permissions : [],
+  })
+
   const fetchRoles = useCallback(async () => {
     setIsLoading(true)
     try {
       const rolesResult = await rbacApi.getRoles({ page, page_size: 20 }) as PaginatedData<Role>
-      setRoles(rolesResult.items)
+      setRoles(Array.isArray(rolesResult.items) ? rolesResult.items.map(normalizeRole) : [])
       setTotalPages(rolesResult.total_pages)
     } catch (error) {
       console.error("获取角色列表失败:", error)
@@ -93,56 +98,60 @@ export function RoleManagement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRoles.map(role => (
-                      <tr key={role.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Shield className="w-4 h-4 text-primary" />
+                    {filteredRoles.map(role => {
+                      const rolePermissions = Array.isArray(role.permissions) ? role.permissions : []
+
+                      return (
+                        <tr key={role.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Shield className="w-4 h-4 text-primary" />
+                              </div>
+                              <span className="text-sm font-medium text-foreground">{role.name}</span>
                             </div>
-                            <span className="text-sm font-medium text-foreground">{role.name}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground font-mono">{role.code}</td>
-                        <td className="py-3 px-4">
-                          <Badge variant="secondary" className="text-xs">
-                            {role.is_system ? (
-                              <span className="flex items-center gap-1">
-                                <Lock className="w-3 h-3" /> 系统内置
-                              </span>
-                            ) : (
-                              "自定义"
-                            )}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-foreground">{role.permissions.length}</td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">
-                          {getPermissionNames(role.permissions)}
-                          {role.permissions.length > 3 && ` 等${role.permissions.length}项`}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-foreground max-w-[200px] truncate">{role.description || "-"}</td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">{role.created_at}</td>
-                        <td className="py-3 px-4">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Edit className="w-4 h-4 mr-2" /> 编辑权限
-                              </DropdownMenuItem>
-                              {!role.is_system && (
-                                <DropdownMenuItem className="text-destructive">
-                                  <Trash2 className="w-4 h-4 mr-2" /> 删除
-                                </DropdownMenuItem>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-muted-foreground font-mono">{role.code}</td>
+                          <td className="py-3 px-4">
+                            <Badge variant="secondary" className="text-xs">
+                              {role.is_system ? (
+                                <span className="flex items-center gap-1">
+                                  <Lock className="w-3 h-3" /> 系统内置
+                                </span>
+                              ) : (
+                                "自定义"
                               )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    ))}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-foreground">{rolePermissions.length}</td>
+                          <td className="py-3 px-4 text-xs text-muted-foreground">
+                            {getPermissionNames(rolePermissions)}
+                            {rolePermissions.length > 3 && ` 等${rolePermissions.length}项`}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-foreground max-w-[200px] truncate">{role.description || "-"}</td>
+                          <td className="py-3 px-4 text-xs text-muted-foreground">{role.created_at}</td>
+                          <td className="py-3 px-4">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem>
+                                  <Edit className="w-4 h-4 mr-2" /> 编辑权限
+                                </DropdownMenuItem>
+                                {!role.is_system && (
+                                  <DropdownMenuItem className="text-destructive">
+                                    <Trash2 className="w-4 h-4 mr-2" /> 删除
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
