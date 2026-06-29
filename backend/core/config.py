@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     
     # MySQL 配置
     DATABASE_HOST: str = "47.109.147.74"
-    DATA_PORT: int = 3306
+    DATABASE_PORT: int = 3306
     DATABASE_NAME: str = "cdut_liaowang"
     DATABASE_USER: str = "cdut_liaowang"
     DATABASE_PASSWORD: str = ""
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        return f"mysql+pymysql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATA_PORT}/{self.DATABASE_NAME}?charset=utf8mb4"
+        return f"mysql+pymysql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}?charset=utf8mb4"
 
     @property
     def cors_allow_origins_list(self) -> List[str]:
