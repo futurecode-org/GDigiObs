@@ -5,14 +5,16 @@ from sqlalchemy.orm import Session
 from database.session import get_db
 from schema.model_config import (
     ModelConfigCreate, ModelConfigUpdate, ModelConfigResponse,
-    ModelConfigListResponse
+    ModelConfigListResponse, ModelConnectivityTest
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext
 from service.model_config_service import (
     get_models_service, get_model_detail_service, create_model_service,
-    update_model_service, delete_model_service, get_platform_models_service,
-    get_available_embedding_models, test_model_service
+    update_model_service, delete_model_service, toggle_model_status_service,
+    get_platform_models_service, get_available_embedding_models, test_model_service,
+    get_model_call_logs_service, get_model_token_usage_service,
+    test_model_connectivity_service
 )
 
 from model.user import User
@@ -57,6 +59,24 @@ def list_embedding_models(
     return ApiResponse.success(data=result)
 
 
+@model_router.post("/test-connectivity", summary="测试模型连通性")
+def test_connectivity(
+    data: ModelConnectivityTest,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """测试模型连通性（无需先保存模型）"""
+    result = test_model_connectivity_service(
+        db, ctx,
+        base_url=data.base_url,
+        api_key=data.api_key or "",
+        model_key=data.model_key,
+        api_type=data.api_type,
+        max_tokens=data.max_tokens or 10
+    )
+    return ApiResponse.success(data=result)
+
+
 @model_router.get("/{model_id}", summary="获取模型配置详情")
 def get_model(
     model_id: int,
@@ -83,6 +103,7 @@ def create_model(
         support_reasoning=data.support_reasoning,
         context_length=data.context_length,
         max_tokens=data.max_tokens,
+        temperature=data.temperature,
         default_config=data.default_config
     )
     return ApiResponse.success(data=result)
@@ -111,6 +132,18 @@ def delete_model(
     return ApiResponse.success(message="模型配置已删除")
 
 
+@model_router.post("/{model_id}/toggle", summary="启用/停用模型配置")
+def toggle_model_status(
+    model_id: int,
+    status: str,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """启用/停用模型配置，status: enabled/disabled"""
+    result = toggle_model_status_service(db, ctx, model_id, status)
+    return ApiResponse.success(data=result)
+
+
 @model_router.post("/{model_id}/test", summary="测试模型配置")
 def test_model(
     model_id: int,
@@ -119,4 +152,34 @@ def test_model(
 ):
     """测试模型配置"""
     result = test_model_service(db, ctx, model_id)
+    return ApiResponse.success(data=result)
+
+
+@model_router.get("/{model_id}/logs", summary="获取模型调用日志")
+def get_model_logs(
+    model_id: int,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """获取模型调用日志"""
+    result = get_model_call_logs_service(db, ctx, model_id, page, page_size)
+    paginated = PaginatedData(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"]
+    )
+    return PaginatedResponse.success(data=paginated)
+
+
+@model_router.get("/{model_id}/token-usage", summary="获取模型Token消耗")
+def get_model_token_usage(
+    model_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """获取模型Token消耗统计"""
+    result = get_model_token_usage_service(db, ctx, model_id)
     return ApiResponse.success(data=result)
