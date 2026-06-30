@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Bell, Check, CheckCheck, Trash2, Search } from "lucide-react";
+import { Bell, Check, CheckCheck, Trash2, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeader } from "@/shared/components/SectionHeader";
-import { notificationApi } from "../../../lib/api";
+import { notificationApi, friendApi } from "../../../lib/api";
+import { toast } from "sonner";
 import type { Notification } from "../../../lib/types";
 import { cn } from "@/lib/utils";
 
@@ -30,20 +31,17 @@ export function NotificationsPage() {
     }
   };
 
-  const filteredNotifs = filter === "all" ? notifications : notifications.filter(n => !n.read);
-  const unreadCount = notifications.filter(n => !n.read).length;
-
   const markAsRead = async (id: number) => {
     try {
       await notificationApi.markAsRead(id);
-      setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
+      setNotifications(notifications.map(n => n.id === id ? { ...n, status: "read", read: true } : n));
     } catch {}
   };
 
   const markAllRead = async () => {
     try {
       await notificationApi.markAllAsRead();
-      setNotifications(notifications.map(n => ({ ...n, read: true })));
+      setNotifications(notifications.map(n => ({ ...n, status: "read", read: true })));
     } catch {}
   };
 
@@ -54,17 +52,55 @@ export function NotificationsPage() {
     } catch {}
   };
 
-  const typeLabels: Record<string, string> = { system: "系统", task: "任务", message: "消息", approval: "审批" };
-  const typeColors: Record<string, string> = { system: "secondary", task: "default", message: "outline", approval: "outline" };
+  const handleAcceptFriendRequest = async (notif: Notification) => {
+    const applicationId = (notif.data as any)?.application_id;
+    if (!applicationId) return;
+    
+    try {
+      await friendApi.acceptApplication(applicationId);
+      setNotifications(notifications.filter(n => n.id !== notif.id));
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || "接受好友申请失败";
+      toast.error(message);
+    }
+  };
+
+  const handleRejectFriendRequest = async (notif: Notification) => {
+    const applicationId = (notif.data as any)?.application_id;
+    if (!applicationId) return;
+    
+    try {
+      await friendApi.rejectApplication(applicationId);
+      setNotifications(notifications.filter(n => n.id !== notif.id));
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || "拒绝好友申请失败";
+      toast.error(message);
+    }
+  };
+
+  const typeLabels: Record<string, string> = { system: "系统", task: "任务", message: "消息", approval: "审批", friend_application: "好友申请" };
+  const typeColors: Record<string, string> = { system: "secondary", task: "default", message: "outline", approval: "outline", friend_application: "destructive" };
+
+  // 获取通知类型（兼容两种字段名）
+  const getNotifType = (notif: Notification) => notif.notification_type || notif.type || "system";
+  
+  // 判断是否未读
+  const isUnread = (notif: Notification) => notif.status === "unread" || notif.read === false;
+
+  const filteredNotifs = filter === "all" ? notifications : notifications.filter(n => isUnread(n));
+  const unreadCount = notifications.filter(n => isUnread(n)).length;
 
   const formatTime = (dateStr: string) => {
+    if (!dateStr) return "";
     const date = new Date(dateStr);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / (1000 * 60));
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     
-    if (hours < 1) return "刚刚";
+    if (minutes < 1) return "刚刚";
+    if (minutes < 60) return `${minutes}分钟前`;
     if (hours < 24) return `${hours}小时前`;
     if (days < 7) return `${days}天前`;
     return date.toLocaleDateString();
@@ -133,31 +169,75 @@ export function NotificationsPage() {
               <p>暂无通知</p>
             </div>
           ) : (
-            filteredNotifs.map(notif => (
-              <Card key={notif.id} className={cn("transition-colors", !notif.read && "bg-primary/5")}>
+            filteredNotifs.map(notif => {
+              const notifType = getNotifType(notif);
+              const unread = isUnread(notif);
+              const fromUsername = (notif.data as any)?.from_username || "";
+              const fromNickname = (notif.data as any)?.from_nickname || fromUsername;
+              const fromRole = (notif.data as any)?.from_role || "";
+              const fromCompany = (notif.data as any)?.from_company || "";
+              
+              // 用户类型中文映射
+              const roleLabels: Record<string, string> = {
+                internal: "内部用户",
+                external: "外部用户",
+                admin: "管理员"
+              };
+              const fromRoleLabel = fromRole ? (roleLabels[fromRole] || fromRole) : "";
+              
+              return (
+              <Card key={notif.id} className={cn("transition-colors", unread && "bg-primary/5")}>
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", notif.read ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
+                    <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", !unread ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
                       <Bell className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium text-foreground">{notif.title}</span>
-                        <Badge variant={typeColors[notif.type] as "default" | "secondary" | "outline" | "destructive" | "ghost"} className="text-[10px]">
-                          {typeLabels[notif.type]}
+                        <span className="text-sm font-medium text-foreground">
+                          {notifType === "friend_application" ? `${fromNickname} 请求添加您为好友` : notif.title}
+                        </span>
+                        <Badge variant={typeColors[notifType] as "default" | "secondary" | "outline" | "destructive" | "ghost"} className="text-[10px]">
+                          {typeLabels[notifType]}
                         </Badge>
-                        {!notif.read && <span className="w-2 h-2 rounded-full bg-primary" />}
                       </div>
-                      <p className="text-xs text-muted-foreground mb-2">{notif.content}</p>
+                      {notifType === "friend_application" ? (
+                        <>
+                          {(fromRoleLabel || fromCompany) && (
+                            <p className="text-xs text-muted-foreground mb-1">{fromRoleLabel}{fromRoleLabel && fromCompany ? " · " : ""}{fromCompany}</p>
+                          )}
+                          {(notif.data as any)?.message && (
+                            <p className="text-xs text-muted-foreground/80 mb-2 italic">"{(notif.data as any).message}"</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mb-2">{notif.content}</p>
+                      )}
                       <div className="flex items-center gap-4">
                         <span className="text-[10px] text-muted-foreground">{formatTime(notif.created_at)}</span>
                         <div className="flex gap-3 ml-auto">
-                          {!notif.read && (
-                            <button onClick={() => markAsRead(notif.id)} className="text-[10px] text-primary hover:underline flex items-center gap-1">
+                          {notifType === "friend_application" && (
+                            <>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleAcceptFriendRequest(notif); }} 
+                                className="text-[10px] text-green-500 hover:underline flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" /> 接受
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleRejectFriendRequest(notif); }} 
+                                className="text-[10px] text-red-400 hover:underline flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" /> 拒绝
+                              </button>
+                            </>
+                          )}
+                          {unread && notifType !== "friend_application" && (
+                            <button onClick={(e) => { e.stopPropagation(); markAsRead(notif.id); }} className="text-[10px] text-primary hover:underline flex items-center gap-1">
                               <Check className="w-3 h-3" /> 标记已读
                             </button>
                           )}
-                          <button onClick={() => deleteNotification(notif.id)} className="text-[10px] text-red-400 hover:underline flex items-center gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); deleteNotification(notif.id); }} className="text-[10px] text-red-400 hover:underline flex items-center gap-1">
                             <Trash2 className="w-3 h-3" /> 删除
                           </button>
                         </div>
@@ -166,7 +246,7 @@ export function NotificationsPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))
+            )})
           )}
         </div>
       )}

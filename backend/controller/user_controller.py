@@ -5,7 +5,7 @@ from database.session import get_db
 from schema.user import UserResponse, UserUpdate, UserCreate, UserListResponse, AssignRoleRequest
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
 from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext
-from service.user_service import get_user_list, get_user_detail, update_user_profile, assign_roles_to_user, disable_user, ban_user
+from service.user_service import get_user_list, get_user_detail, update_user_profile, assign_roles_to_user, disable_user, ban_user, search_users
 
 from model.user import User
 
@@ -28,6 +28,43 @@ def list_users(
     - 支持分页
     """
     result = get_user_list(db, ctx, page, page_size)
+    paginated = PaginatedData(
+        items=[UserResponse.model_validate(u) for u in result["items"]],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"]
+    )
+    return PaginatedResponse.success(data=paginated)
+
+
+@user_router.get("/search", summary="搜索用户")
+def search_user_endpoint(
+    keyword: str,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    搜索用户（用于添加好友等场景）
+    
+    - 支持按用户名或昵称搜索
+    - 自动排除当前用户
+    - 仅搜索同一租户下的用户
+    - 支持分页
+    """
+    from core.dependencies import RequestContext
+    
+    # 构造 RequestContext
+    ctx = RequestContext(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        username=current_user.username or "",
+        is_super_admin=current_user.user_type == "admin"
+    )
+    
+    result = search_users(db, ctx, keyword, page, page_size)
     paginated = PaginatedData(
         items=[UserResponse.model_validate(u) for u in result["items"]],
         total=result["total"],

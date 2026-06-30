@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { UserPage } from "@/lib/types"
 import { TopBar } from "@/shared/components/TopBar"
 import { UserSidebar } from "@/shared/components/UserSidebar"
@@ -40,11 +40,22 @@ export function UserApp({ onSwitch }: UserAppProps) {
   const [currentPage, setCurrentPage] = useState<UserPage>("dashboard")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
+  useEffect(() => {
+    const handleNavigateToContacts = () => {
+      setCurrentPage("contacts");
+    };
+    
+    window.addEventListener("navigate_to_contacts", handleNavigateToContacts);
+    return () => {
+      window.removeEventListener("navigate_to_contacts", handleNavigateToContacts);
+    };
+  }, []);
+
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <UserDashboard />
       case "messages": return <MessagesPage />
-      case "contacts": return <ContactsPage />
+      case "contacts": return <ContactsPage onNavigate={setCurrentPage} />
       case "query": return <QueryPage />
       case "query-history": return <QueryHistoryPage />
       case "knowledge": return <KnowledgePage />

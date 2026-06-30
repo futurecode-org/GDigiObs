@@ -1,6 +1,6 @@
 """会话管理数据访问层"""
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc
+from sqlalchemy import and_, or_, desc, func
 from typing import List, Optional
 from datetime import datetime
 
@@ -18,7 +18,7 @@ def get_or_create_direct_conversation(db: Session, user_id1: int, user_id2: int,
         Conversation.tenant_id == tenant_id,
         Conversation.type == "direct"
     ).group_by(Conversation.id).having(
-        db.func.count(ConversationMember.user_id) == 2
+        func.count(ConversationMember.user_id) == 2
     ).first()
     
     if existing:

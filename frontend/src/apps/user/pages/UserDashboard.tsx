@@ -27,7 +27,7 @@ export function UserDashboard() {
       setConversations(convList.slice(0, 4));
 
       const taskList = taskResult.items || [];
-      setTasks(taskList.filter(t => t.status !== "completed").slice(0, 3));
+      setTasks(taskList.filter((t: WorkflowRun) => t.status !== "completed").slice(0, 3));
 
       const [askResult, knowledgeResult, skillResult] = await Promise.all([
         askApi.getList({ page: 1, page_size: 1 }),

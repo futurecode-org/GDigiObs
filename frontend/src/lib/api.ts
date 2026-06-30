@@ -13,6 +13,9 @@ import type {
   Friend,
   FriendApplication,
   Group,
+  GroupAnnouncement,
+  GroupInvitation,
+  GroupJoinApplication,
   KnowledgeBase,
   KnowledgeFile,
   Message,
@@ -266,11 +269,31 @@ export const conversationApi = {
 
   updateSettings: (conversationId: number, settings?: { pinned?: boolean; muted?: boolean; hidden?: boolean }): Promise<void> =>
     put(`/conversations/${conversationId}/settings`, settings),
+
+  searchMessages: (conversationId: number, keyword: string, params?: { page?: number; page_size?: number }): Promise<Message[]> =>
+    get(`/conversations/${conversationId}/messages/search`, { keyword, ...params }),
 };
 
 export const friendApi = {
-  getList: (): Promise<Friend[]> =>
-    get("/friends"),
+  getList: async (): Promise<Friend[]> => {
+    const data = await get("/friends") as any[];
+    return data.map((item: any) => ({
+      id: item.friend_relation?.id || item.id,
+      user_id: item.friend_user?.id || item.user_id,
+      friend_id: item.friend_user?.id || item.friend_id,
+      user_info: item.friend_user,
+      friend_info: item.friend_user,
+      nickname: item.friend_user?.nickname,
+      username: item.friend_user?.username,
+      remark: item.friend_relation?.remark,
+      group: item.friend_relation?.group_name,
+      is_online: item.friend_user?.is_online || false,
+      last_online_at: item.friend_user?.last_online_at,
+      status: "accepted" as const,
+      created_at: item.friend_relation?.created_at || item.created_at,
+      updated_at: item.friend_relation?.created_at || item.updated_at,
+    }));
+  },
 
   apply: (toUserId: number, message?: string): Promise<void> =>
     post("/friends/apply", { to_user_id: toUserId, message }),
@@ -295,6 +318,12 @@ export const friendApi = {
 
   delete: (friendUserId: number): Promise<void> =>
     del(`/friends/${friendUserId}`),
+
+  updateRemark: (friendUserId: number, remark: string): Promise<void> =>
+    put(`/friends/${friendUserId}/remark`, { remark }),
+
+  setGroup: (friendUserId: number, group: string): Promise<void> =>
+    put(`/friends/${friendUserId}/group`, { group }),
 };
 
 export const groupApi = {
@@ -324,11 +353,56 @@ export const groupApi = {
 
   dissolve: (groupId: number): Promise<void> =>
     del(`/groups/${groupId}`),
+
+  getAnnouncements: (groupId: number): Promise<GroupAnnouncement[]> =>
+    get(`/groups/${groupId}/announcements`),
+
+  createAnnouncement: (groupId: number, content: string): Promise<GroupAnnouncement> =>
+    post(`/groups/${groupId}/announcements`, { content }),
+
+  updateAnnouncement: (groupId: number, announcementId: number, content: string, status?: string): Promise<GroupAnnouncement> =>
+    put(`/groups/${groupId}/announcements/${announcementId}`, { content, status }),
+
+  deactivateAnnouncement: (groupId: number, announcementId: number): Promise<void> =>
+    post(`/groups/${groupId}/announcements/${announcementId}/deactivate`),
+
+  getJoinApplications: (groupId?: number): Promise<GroupJoinApplication[]> =>
+    get("/groups/join-applications", groupId ? { group_id: groupId } : undefined),
+
+  applyToJoin: (groupId: number, message?: string): Promise<void> =>
+    post(`/groups/${groupId}/apply`, { message }),
+
+  acceptJoinApplication: (groupId: number, applicationId: number): Promise<void> =>
+    post(`/groups/${groupId}/join-applications/${applicationId}/accept`),
+
+  rejectJoinApplication: (groupId: number, applicationId: number): Promise<void> =>
+    post(`/groups/${groupId}/join-applications/${applicationId}/reject`),
+
+  getInvitations: (groupId?: number): Promise<GroupInvitation[]> =>
+    get("/groups/invitations", groupId ? { group_id: groupId } : undefined),
+
+  inviteToGroup: (groupId: number, inviteeIds: number[], message?: string): Promise<void> =>
+    post(`/groups/${groupId}/invite`, { invitee_ids: inviteeIds, message }),
+
+  acceptInvitation: (invitationId: number): Promise<void> =>
+    post(`/groups/invitations/${invitationId}/accept`),
+
+  rejectInvitation: (invitationId: number): Promise<void> =>
+    post(`/groups/invitations/${invitationId}/reject`),
+
+  muteMember: (groupId: number, userId: number, durationMinutes?: number): Promise<void> =>
+    post(`/groups/${groupId}/members/${userId}/mute`, { duration_minutes: durationMinutes }),
+
+  unmuteMember: (groupId: number, userId: number): Promise<void> =>
+    post(`/groups/${groupId}/members/${userId}/unmute`),
 };
 
 export const userApi = {
   getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<User>> =>
     get("/users", params),
+
+  search: (keyword: string, params?: { page?: number; page_size?: number }): Promise<PaginatedData<User>> =>
+    get("/users/search", { keyword, ...params }),
 
   getDetail: (userId: number): Promise<User> =>
     get(`/users/${userId}`),

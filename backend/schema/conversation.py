@@ -40,7 +40,7 @@ class ConversationMemberResponse(BaseModel):
 
 class MessageCreate(BaseModel):
     """创建消息请求"""
-    conversation_id: int = Field(..., description="会话ID")
+    conversation_id: Optional[int] = Field(None, description="会话ID")
     message_type: str = Field(..., description="消息类型: text/image/file/audio/video/emoji")
     content: Optional[str] = Field(None, description="消息内容")
     file_id: Optional[int] = Field(None, description="文件ID")

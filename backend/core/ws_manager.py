@@ -13,9 +13,14 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket, user_id: int):
         await websocket.accept()
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = []
-        self.active_connections[user_id].append(websocket)
+        if user_id in self.active_connections:
+            for existing_ws in self.active_connections[user_id]:
+                try:
+                    await existing_ws.close()
+                except:
+                    pass
+                del self.connection_user_map[id(existing_ws)]
+        self.active_connections[user_id] = [websocket]
         self.connection_user_map[id(websocket)] = user_id
         logger.info(f"用户 {user_id} 建立WebSocket连接")
 
@@ -30,12 +35,18 @@ class ConnectionManager:
 
     async def send_personal_message(self, user_id: int, event: str, data: dict):
         message = json.dumps({"event": event, "data": data})
+        logger.info(f"尝试发送消息给用户 {user_id}, event={event}")
+        logger.info(f"活跃连接用户: {list(self.active_connections.keys())}")
         if user_id in self.active_connections:
+            logger.info(f"用户 {user_id} 有活跃连接，开始发送")
             for websocket in self.active_connections[user_id]:
                 try:
                     await websocket.send_text(message)
+                    logger.info(f"消息发送成功给用户 {user_id}")
                 except Exception as e:
                     logger.error(f"发送消息给用户 {user_id} 失败: {e}")
+        else:
+            logger.warning(f"用户 {user_id} 没有活跃连接，跳过发送")
 
     async def send_message_to_users(self, user_ids: List[int], event: str, data: dict):
         for user_id in user_ids:
@@ -54,11 +65,21 @@ class ConnectionManager:
 ws_manager = ConnectionManager()
 
 
-async def broadcast_message_new(conversation_id: int, message_id: int, recipient_user_ids: List[int]):
+async def broadcast_message_new(conversation_id: int, message_data: Dict, recipient_user_ids: List[int]):
+    """广播新消息
+    
+    Args:
+        conversation_id: 会话ID
+        message_data: 完整的消息数据（包含sender_name等）
+        recipient_user_ids: 接收者用户ID列表
+    """
     await ws_manager.send_message_to_users(
         recipient_user_ids,
         "message.new",
-        {"conversation_id": conversation_id, "message_id": message_id}
+        {
+            "conversation_id": conversation_id,
+            "message": message_data
+        }
     )
 
 

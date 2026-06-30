@@ -1,5 +1,5 @@
 """群组管理控制器"""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -29,8 +29,11 @@ from service.group_service import (
     reject_group_invitation_service, mute_group_member_service,
     unmute_group_member_service
 )
+from service.notification_service import send_notification_service
+from dao.user_dao import get_user_by_id
 
 from model.user import User
+from core.ws_manager import ws_manager
 
 
 group_router = APIRouter(prefix="/groups", tags=["群组管理 Group"])
@@ -64,6 +67,58 @@ def list_groups(
     获取用户所在的所有群组
     """
     result = get_groups(db, current_user)
+    return ApiResponse.success(data=result)
+
+
+# 注意：/invitations 路由必须在 /{group_id} 之前定义，否则会被误匹配
+@group_router.get("/invitations", summary="获取收到的群邀请")
+def list_invitations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取用户收到的群邀请列表
+    """
+    result = get_user_group_invitations_service(db, current_user)
+    return ApiResponse.success(data=result)
+
+
+@group_router.post("/invitations/{invitation_id}/accept", summary="接受群邀请")
+def accept_invitation(
+    invitation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    接受群邀请
+    """
+    accept_group_invitation_service(db, current_user, invitation_id)
+    return ApiResponse.success(message="已接受群邀请")
+
+
+@group_router.post("/invitations/{invitation_id}/reject", summary="拒绝群邀请")
+def reject_invitation(
+    invitation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    拒绝群邀请
+    """
+    reject_group_invitation_service(db, current_user, invitation_id)
+    return ApiResponse.success(message="已拒绝群邀请")
+
+
+# join-applications 路由也必须在 /{group_id} 之前
+@group_router.get("/join-applications", summary="获取我的入群申请")
+def list_my_join_applications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取用户的入群申请列表
+    """
+    result = get_user_group_join_applications_service(db, current_user)
     return ApiResponse.success(data=result)
 
 
@@ -278,18 +333,6 @@ def list_join_applications(
     return ApiResponse.success(data=result)
 
 
-@group_router.get("/join-applications", summary="获取我的入群申请")
-def list_my_join_applications(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    获取用户的入群申请列表
-    """
-    result = get_user_group_join_applications_service(db, current_user)
-    return ApiResponse.success(data=result)
-
-
 @group_router.post("/join-applications/{application_id}/accept", summary="接受入群申请")
 def accept_join_application(
     application_id: int,
@@ -339,44 +382,6 @@ def invite_user(
         result = invite_to_group_service(db, current_user, group_id, invitee_id, data.message)
         results.append(result)
     return ApiResponse.success(data=results)
-
-
-@group_router.get("/invitations", summary="获取收到的群邀请")
-def list_invitations(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    获取用户收到的群邀请列表
-    """
-    result = get_user_group_invitations_service(db, current_user)
-    return ApiResponse.success(data=result)
-
-
-@group_router.post("/invitations/{invitation_id}/accept", summary="接受群邀请")
-def accept_invitation(
-    invitation_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    接受群邀请
-    """
-    accept_group_invitation_service(db, current_user, invitation_id)
-    return ApiResponse.success(message="已接受群邀请")
-
-
-@group_router.post("/invitations/{invitation_id}/reject", summary="拒绝群邀请")
-def reject_invitation(
-    invitation_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    拒绝群邀请
-    """
-    reject_group_invitation_service(db, current_user, invitation_id)
-    return ApiResponse.success(message="已拒绝群邀请")
 
 
 # 群禁言管理
@@ -434,12 +439,45 @@ def list_friends(
 def apply_friend(
     data: FriendApplicationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = None
 ):
     """
     申请添加好友
     """
-    apply_friend_service(db, current_user, data.to_user_id, data.message)
+    application = apply_friend_service(db, current_user, data.to_user_id, data.message)
+    
+    # 获取被添加方信息
+    to_user = get_user_by_id(db, data.to_user_id)
+    
+    # 创建数据库通知（保证不在线时也能收到）
+    send_notification_service(
+        db, 
+        to_user.tenant_id or 0, 
+        data.to_user_id,
+        "friend_application",
+        "好友申请",
+        f"{current_user.username} 请求添加您为好友",
+        {
+            "application_id": application.id, 
+            "from_user_id": current_user.id, 
+            "from_username": current_user.username,
+            "from_nickname": current_user.nickname or current_user.username,
+            "from_role": current_user.user_type or "",
+            "from_company": "",
+            "message": data.message or ""
+        }
+    )
+    
+    # 通过WebSocket推送好友申请通知
+    if background_tasks:
+        background_tasks.add_task(
+            ws_manager.send_personal_message,
+            data.to_user_id,
+            "friend.application.new",
+            {"from_user_id": current_user.id, "from_username": current_user.username, "message": data.message}
+        )
+    
     return ApiResponse.success(message="好友申请已发送")
 
 

@@ -6,6 +6,7 @@ import { UserApp } from "./apps/user/UserApp";
 import { LoginPage } from "./apps/common/LoginPage";
 import { RegisterPage } from "./apps/common/RegisterPage";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Toaster } from "@/components/ui/sonner";
 
 function AppContent() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -57,6 +58,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppContent />
+        <Toaster />
       </AuthProvider>
     </BrowserRouter>
   );

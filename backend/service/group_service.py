@@ -19,10 +19,12 @@ from dao.group_dao import (
     get_group_invitation, accept_group_invitation, reject_group_invitation,
     mute_group_member, unmute_group_member, is_group_member_muted
 )
+from model.group import FriendApplication
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from model.user import User
 from model.group import Group, GroupJoinApplication, GroupInvitation
+from core.ws_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -266,7 +268,7 @@ def get_friends_service(db: Session, current_user: User) -> List[Dict]:
     return result
 
 
-def apply_friend_service(db: Session, current_user: User, to_user_id: int, message: str = None):
+def apply_friend_service(db: Session, current_user: User, to_user_id: int, message: str = None) -> FriendApplication:
     """申请添加好友"""
     target_user = get_user_by_id(db, to_user_id)
     if not target_user:
@@ -289,6 +291,7 @@ def apply_friend_service(db: Session, current_user: User, to_user_id: int, messa
     
     application = create_friend_application(db, current_user.id, to_user_id, message)
     logger.info(f"申请添加好友: from={current_user.id}, to={to_user_id}")
+    return application
 
 
 def get_friend_applications_service(db: Session, current_user: User) -> List[Dict]:
@@ -300,14 +303,23 @@ def get_friend_applications_service(db: Session, current_user: User) -> List[Dic
         from_user = get_user_by_id(db, app.from_user_id)
         result.append({
             "id": app.id,
+            "from_user_id": app.from_user_id,
+            "to_user_id": app.to_user_id,
+            "message": app.message,
+            "status": app.status,
             "from_user": {
                 "id": from_user.id,
                 "username": from_user.username,
                 "nickname": from_user.nickname,
                 "avatar_file_id": from_user.avatar_file_id
             },
-            "message": app.message,
-            "created_at": app.created_at
+            "from_nickname": from_user.nickname or from_user.username,
+            "from_username": from_user.username,
+            "from_role": from_user.user_type or "",
+            "from_company": "",
+            "type": "friend",
+            "created_at": app.created_at,
+            "updated_at": app.created_at
         })
     
     return result
@@ -568,24 +580,24 @@ def get_user_group_invitations_service(db: Session, current_user: User) -> List[
     invitations = get_user_group_invitations(db, current_user.id)
     result = []
     for invite in invitations:
+        if not invite:
+            continue
         group = get_group_by_id(db, invite.group_id)
         inviter = get_user_by_id(db, invite.inviter_id)
         if group and inviter:
             result.append({
                 "id": invite.id,
-                "group": {
-                    "id": group.id,
-                    "name": group.name,
-                    "avatar_file_id": group.avatar_file_id
-                },
-                "inviter": {
-                    "id": inviter.id,
-                    "username": inviter.username,
-                    "nickname": inviter.nickname
-                },
-                "message": invite.message,
-                "expires_at": invite.expires_at,
-                "created_at": invite.created_at
+                "tenant_id": group.tenant_id or 0,
+                "group_id": invite.group_id,
+                "inviter_id": invite.inviter_id,
+                "invitee_id": invite.invitee_id,
+                "message": invite.message or "",
+                "status": invite.status or "pending",
+                "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+                "accepted_at": invite.accepted_at.isoformat() if invite.accepted_at else None,
+                "created_at": invite.created_at.isoformat() if invite.created_at else None,
+                "group_name": group.name or "",
+                "inviter_name": (inviter.nickname or inviter.username) if inviter else ""
             })
     return result
 
