@@ -4,6 +4,8 @@ import type {
   AnalysisTask,
   AskRecord,
   CollectedItem,
+  CollectedItemDetail,
+  CollectLog,
   CollectPlatform,
   CollectTask,
   Conversation,
@@ -534,13 +536,24 @@ export const workflowApi = {
 };
 
 export const collectApi = {
-  getPlatforms: (): Promise<CollectPlatform[]> =>
-    get("/collect/platforms"),
+  // 平台管理
+  getPlatforms: (params?: { status?: string }): Promise<{ items: CollectPlatform[]; total: number }> =>
+    get("/collect/platforms", params),
+
+  getPlatformDetail: (platformId: number): Promise<CollectPlatform> =>
+    get(`/collect/platforms/${platformId}`),
 
   createPlatform: (data: unknown): Promise<CollectPlatform> =>
     post("/collect/platforms", data),
 
-  getTasks: (params?: { is_public?: boolean; page?: number; page_size?: number }): Promise<PaginatedData<CollectTask>> =>
+  updatePlatform: (platformId: number, data: unknown): Promise<CollectPlatform> =>
+    put(`/collect/platforms/${platformId}`, data),
+
+  deletePlatform: (platformId: number): Promise<void> =>
+    del(`/collect/platforms/${platformId}`),
+
+  // 任务管理
+  getTasks: (params?: { status?: string; is_public?: boolean; page?: number; page_size?: number }): Promise<PaginatedData<CollectTask>> =>
     get("/collect/tasks", params),
 
   getTaskDetail: (taskId: number): Promise<CollectTask> =>
@@ -561,10 +574,14 @@ export const collectApi = {
   disableTask: (taskId: number): Promise<void> =>
     post(`/collect/tasks/${taskId}/disable`),
 
-  getItems: (params?: { task_id?: number; status?: string; page?: number; page_size?: number }): Promise<PaginatedData<CollectedItem>> =>
+  runTask: (taskId: number): Promise<{ message: string }> =>
+    post(`/collect/tasks/${taskId}/run`),
+
+  // 采集数据
+  getItems: (params?: { task_id?: number; status?: string; keyword?: string; page?: number; page_size?: number }): Promise<PaginatedData<CollectedItem>> =>
     get("/collect/items", params),
 
-  getItemDetail: (itemId: number): Promise<CollectedItem> =>
+  getItemDetail: (itemId: number): Promise<CollectedItemDetail> =>
     get(`/collect/items/${itemId}`),
 
   updateItem: (itemId: number, data: unknown): Promise<CollectedItem> =>
@@ -576,7 +593,8 @@ export const collectApi = {
   analyzeItem: (itemId: number): Promise<void> =>
     post(`/collect/items/${itemId}/analyze`),
 
-  getLogs: (params?: { task_id?: number; page?: number; page_size?: number }): Promise<unknown[]> =>
+  // 采集日志
+  getLogs: (params?: { task_id?: number; status?: string; page?: number; page_size?: number }): Promise<PaginatedData<CollectLog>> =>
     get("/collect/logs", params),
 };
 
