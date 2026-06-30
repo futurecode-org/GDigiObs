@@ -374,7 +374,7 @@ export function TenantManagement() {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>租户详情</DialogTitle>
           </DialogHeader>

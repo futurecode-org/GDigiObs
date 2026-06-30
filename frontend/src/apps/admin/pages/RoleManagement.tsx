@@ -313,7 +313,7 @@ export function RoleManagement() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>{editingRole ? "编辑角色" : "创建角色"}</DialogTitle>
           </DialogHeader>
@@ -392,7 +392,7 @@ export function RoleManagement() {
 
       {/* Permission Dialog */}
       <Dialog open={permDialogOpen} onOpenChange={setPermDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>分配权限 - {permRole?.name}</DialogTitle>
           </DialogHeader>
@@ -436,7 +436,7 @@ export function RoleManagement() {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>角色详情</DialogTitle>
           </DialogHeader>
