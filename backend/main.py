@@ -29,6 +29,7 @@ from controller.file_controller import file_router
 from controller.audit_controller import audit_router, ask_router
 from controller.dify_controller import dify_router, assistant_router
 from controller.ws_controller import ws_router
+from controller.organization_controller import org_router
 from core.exceptions import (
     BusinessException,
     business_exception_handler,
@@ -113,6 +114,7 @@ app.include_router(audit_router, prefix="/api/v1")
 app.include_router(ask_router, prefix="/api/v1")
 app.include_router(dify_router, prefix="/api/v1")
 app.include_router(assistant_router, prefix="/api/v1")
+app.include_router(org_router, prefix="/api/v1")
 app.include_router(ws_router)
 
 
