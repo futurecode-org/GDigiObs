@@ -597,7 +597,7 @@ export function UserManagement() {
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>用户详情</DialogTitle>
           </DialogHeader>

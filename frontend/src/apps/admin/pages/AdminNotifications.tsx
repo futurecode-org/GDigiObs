@@ -233,7 +233,7 @@ export function AdminNotifications() {
 
       {/* Send Dialog */}
       <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={e => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>发送系统通知</DialogTitle>
           </DialogHeader>
