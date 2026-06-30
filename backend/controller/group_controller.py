@@ -17,7 +17,7 @@ from service.group_service import (
     create_group_service, get_groups, get_group_detail,
     add_group_members_service, remove_group_member_service,
     leave_group_service, update_group_service, set_group_admin,
-    dissolve_group_service, get_friends_service, apply_friend_service,
+    transfer_group_owner, dissolve_group_service, get_friends_service, apply_friend_service,
     get_friend_applications_service, accept_friend_application_service,
     reject_friend_application_service, delete_friend_service,
     create_group_announcement_service, get_group_announcements_service,
@@ -40,7 +40,8 @@ from core.ws_manager import ws_manager
 group_router = APIRouter(prefix="/groups", tags=["群组管理 Group"])
 
 
-# 群组管理
+# ============== 群组管理 ==============
+
 @group_router.post("", summary="创建群组")
 def create_group(
     data: GroupCreate,
@@ -172,6 +173,7 @@ def remove_member(
     
     - 只有群主和管理员可移除
     - 不能移除群主
+    - 管理员不能移除其他管理员（除非群主操作）
     """
     remove_group_member_service(db, current_user, group_id, user_id)
     return ApiResponse.success(message="成员已移除")
@@ -221,9 +223,27 @@ def set_admin(
     设置/取消群管理员
     
     - 只有群主能设置管理员
+    - 不能设置群主自己
     """
     set_group_admin(db, current_user, group_id, user_id, is_admin)
     return ApiResponse.success(message="管理员设置已更新")
+
+
+@group_router.post("/{group_id}/transfer-owner", summary="转让群主")
+def transfer_owner(
+    group_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    转让群主
+    
+    - 只有群主能转让群主
+    - 目标用户必须是群成员
+    """
+    transfer_group_owner(db, current_user, group_id, user_id)
+    return ApiResponse.success(message="群主转让成功")
 
 
 @group_router.delete("/{group_id}", summary="解散群组")
@@ -242,7 +262,8 @@ def dissolve_group(
     return ApiResponse.success(message="群组已解散")
 
 
-# 群公告管理
+# ============== 群公告管理 ==============
+
 @group_router.post("/{group_id}/announcements", summary="发布群公告")
 def create_announcement(
     group_id: int,
@@ -305,7 +326,8 @@ def deactivate_announcement(
     return ApiResponse.success(message="公告已停用")
 
 
-# 入群申请管理
+# ============== 入群申请管理 ==============
+
 @group_router.post("/{group_id}/join-apply", summary="申请入群")
 def apply_join(
     group_id: int,
@@ -368,7 +390,8 @@ def reject_join_application(
     return ApiResponse.success(message="已拒绝入群申请")
 
 
-# 群邀请管理
+# ============== 群邀请管理 ==============
+
 @group_router.post("/{group_id}/invite", summary="邀请用户进群")
 def invite_user(
     group_id: int,
@@ -381,6 +404,7 @@ def invite_user(
     邀请用户进群
     
     - 群成员可邀请（取决于群组设置）
+    - 支持跨租户邀请（外部用户和内部员工可以加入同一群）
     """
     results = []
     for invitee_id in data.invitee_ids:
@@ -424,7 +448,8 @@ def invite_user(
     return ApiResponse.success(data=results)
 
 
-# 群禁言管理
+# ============== 群禁言管理 ==============
+
 @group_router.post("/{group_id}/mute", summary="禁言群成员")
 def mute_member(
     group_id: int,
@@ -437,6 +462,7 @@ def mute_member(
     
     - 只有群主和管理员可以禁言
     - 不能禁言群主
+    - 管理员不能禁言其他管理员（除非群主操作）
     """
     for user_id in data.user_ids:
         mute_group_member_service(db, current_user, group_id, user_id, data.mute_hours)
@@ -459,7 +485,8 @@ def unmute_member(
     return ApiResponse.success(message="已解除禁言")
 
 
-# 好友管理
+# ============== 好友管理 ==============
+
 friend_router = APIRouter(prefix="/friends", tags=["好友管理 Friend"])
 
 
@@ -484,6 +511,9 @@ def apply_friend(
 ):
     """
     申请添加好友
+    
+    - 外部用户和内部员工可互加好友，但必须双方同意
+    - 如果双方同时发送申请，自动建立好友关系
     """
     application = apply_friend_service(db, current_user, data.to_user_id, data.message)
     

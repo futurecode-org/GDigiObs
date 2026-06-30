@@ -19,16 +19,18 @@ from dao.group_dao import (
     get_group_invitation, accept_group_invitation, reject_group_invitation,
     mute_group_member, unmute_group_member, is_group_member_muted
 )
-from model.group import FriendApplication
+from model.group import FriendApplication, GroupJoinApplication, GroupInvitation
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from model.user import User
 from service.notification_service import send_notification_service
-from model.group import Group, GroupJoinApplication, GroupInvitation
+from model.group import Group
 from core.ws_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
+
+# ============== 群组管理 ==============
 
 def create_group_service(db: Session, current_user: User, name: str, 
                          description: str = None, max_members: int = 500) -> Dict:
@@ -62,6 +64,10 @@ def get_groups(db: Session, current_user: User) -> List[Dict]:
         current_member = get_group_member(db, group.id, current_user.id)
         role = current_member.role if current_member else None
         
+        # 获取群主信息
+        owner_member = get_group_member(db, group.id, group.owner_id)
+        owner_user = get_user_by_id(db, group.owner_id) if owner_member else None
+        
         result.append({
             "id": group.id,
             "name": group.name,
@@ -69,7 +75,13 @@ def get_groups(db: Session, current_user: User) -> List[Dict]:
             "max_members": group.max_members,
             "member_count": member_count,
             "status": group.status,
+            "my_role": role,
             "created_by": group.owner_id,
+            "owner": {
+                "user_id": owner_user.id if owner_user else group.owner_id,
+                "username": owner_user.username if owner_user else None,
+                "nickname": owner_user.nickname if owner_user else None,
+            } if owner_user else None,
             "created_at": group.created_at.isoformat() if group.created_at else None,
             "updated_at": group.updated_at.isoformat() if group.updated_at else None
         })
@@ -118,6 +130,9 @@ def get_group_detail(db: Session, current_user: User, group_id: int) -> Dict:
         "max_members": group.max_members,
         "member_count": len(members),
         "status": group.status,
+        "join_mode": group.join_mode,
+        "allow_member_invite": group.allow_member_invite,
+        "my_role": role,
         "created_by": group.owner_id,
         "members": member_info,
         "created_at": group.created_at.isoformat() if group.created_at else None,
@@ -146,7 +161,8 @@ def add_group_members_service(db: Session, current_user: User, group_id: int,
     for user_id in user_ids:
         if not is_group_member(db, group_id, user_id):
             user = get_user_by_id(db, user_id)
-            if user and user.tenant_id == group.tenant_id:
+            if user:
+                # 允许跨租户邀请（外部用户和内部员工可以加入同一群）
                 add_group_member(db, group_id, user_id)
     
     logger.info(f"添加群成员: group_id={group_id}, user_ids={user_ids}")
@@ -167,6 +183,11 @@ def remove_group_member_service(db: Session, current_user: User, group_id: int, 
     target_member = get_group_member(db, group_id, user_id)
     if target_member and target_member.role == "owner":
         raise ForbiddenException("不能移除群主")
+    
+    # 管理员不能移除其他管理员（除非群主操作）
+    if target_member and target_member.role == "admin":
+        if current_member.role != "owner":
+            raise ForbiddenException("只有群主可以移除管理员")
     
     success = remove_group_member(db, group_id, user_id)
     if not success:
@@ -200,7 +221,7 @@ def update_group_service(db: Session, current_user: User, group_id: int, **kwarg
         raise ForbiddenException("无权更新群组信息")
     
     # 群主才能修改的关键信息
-    owner_only_fields = ["max_members", "join_mode", "allow_member_invite"]
+    owner_only_fields = ["max_members", "join_mode", "allow_member_invite", "status"]
     if any(field in kwargs for field in owner_only_fields):
         if current_member.role != "owner":
             raise ForbiddenException("只有群主才能修改这些信息")
@@ -225,10 +246,40 @@ def set_group_admin(db: Session, current_user: User, group_id: int, user_id: int
     if not current_member or current_member.role != "owner":
         raise ForbiddenException("只有群主才能设置管理员")
     
+    # 不能设置群主自己
+    if user_id == group.owner_id:
+        raise BadRequestException("不能修改群主的角色")
+    
     role = "admin" if is_admin else "member"
     success = update_group_member_role(db, group_id, user_id, role)
     if not success:
         raise NotFoundException("成员不存在")
+
+
+def transfer_group_owner(db: Session, current_user: User, group_id: int, user_id: int):
+    """转让群主"""
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise NotFoundException("群组不存在")
+    
+    # 只有群主能转让
+    current_member = get_group_member(db, group_id, current_user.id)
+    if not current_member or current_member.role != "owner":
+        raise ForbiddenException("只有群主才能转让群主")
+    
+    # 目标用户必须是群成员
+    if not is_group_member(db, group_id, user_id):
+        raise BadRequestException("目标用户不是群成员")
+    
+    # 更新群主
+    group.owner_id = user_id
+    db.commit()
+    
+    # 更新角色
+    update_group_member_role(db, group_id, current_user.id, "member")
+    update_group_member_role(db, group_id, user_id, "owner")
+    
+    logger.info(f"转让群主: group_id={group_id}, from={current_user.id}, to={user_id}")
 
 
 def dissolve_group_service(db: Session, current_user: User, group_id: int):
@@ -246,7 +297,8 @@ def dissolve_group_service(db: Session, current_user: User, group_id: int):
     logger.info(f"解散群组: group_id={group_id}")
 
 
-# 好友管理服务
+# ============== 好友管理 ==============
+
 def get_friends_service(db: Session, current_user: User) -> List[Dict]:
     """获取好友列表"""
     friends = get_user_friends(db, current_user.id)
@@ -267,7 +319,8 @@ def get_friends_service(db: Session, current_user: User) -> List[Dict]:
                     "username": friend_user.username,
                     "nickname": friend_user.nickname,
                     "avatar_file_id": friend_user.avatar_file_id,
-                    "status": friend_user.status
+                    "status": friend_user.status,
+                    "user_type": friend_user.user_type
                 }
             })
     
@@ -294,6 +347,18 @@ def apply_friend_service(db: Session, current_user: User, to_user_id: int, messa
     
     if pending:
         raise BadRequestException("已有待处理的申请")
+    
+    # 检查对方是否已发送申请（如果是，直接接受）
+    reverse_pending = db.query(FriendApplication).filter(
+        FriendApplication.from_user_id == to_user_id,
+        FriendApplication.to_user_id == current_user.id,
+        FriendApplication.status == "pending"
+    ).first()
+    
+    if reverse_pending:
+        # 直接接受对方申请
+        accept_friend_application(db, reverse_pending.id, current_user.id)
+        return reverse_pending
     
     application = create_friend_application(db, current_user.id, to_user_id, message)
     logger.info(f"申请添加好友: from={current_user.id}, to={to_user_id}")
@@ -356,7 +421,8 @@ def delete_friend_service(db: Session, current_user: User, friend_user_id: int):
     logger.info(f"删除好友: user_id={current_user.id}, friend_id={friend_user_id}")
 
 
-# 群公告服务
+# ============== 群公告管理 ==============
+
 def create_group_announcement_service(db: Session, current_user: User, group_id: int, content: str):
     """创建群公告"""
     group = get_group_by_id(db, group_id)
@@ -434,7 +500,8 @@ def deactivate_group_announcement_service(db: Session, current_user: User, annou
     logger.info(f"停用群公告: announcement_id={announcement_id}")
 
 
-# 入群申请服务
+# ============== 入群申请管理 ==============
+
 def apply_group_join_service(db: Session, current_user: User, group_id: int, message: str = None):
     """申请入群"""
     group = get_group_by_id(db, group_id)
@@ -542,7 +609,8 @@ def reject_group_join_application_service(db: Session, current_user: User, appli
     logger.info(f"拒绝入群申请: application_id={application_id}")
 
 
-# 群邀请服务
+# ============== 群邀请管理 ==============
+
 def invite_to_group_service(db: Session, current_user: User, group_id: int, invitee_id: int, message: str = None):
     """邀请用户进群"""
     group = get_group_by_id(db, group_id)
@@ -625,7 +693,8 @@ def reject_group_invitation_service(db: Session, current_user: User, invitation_
     logger.info(f"拒绝群邀请: user_id={current_user.id}, invitation_id={invitation_id}")
 
 
-# 群禁言服务
+# ============== 群禁言管理 ==============
+
 def mute_group_member_service(db: Session, current_user: User, group_id: int, user_id: int, mute_hours: int):
     """禁言群成员"""
     group = get_group_by_id(db, group_id)
@@ -642,6 +711,10 @@ def mute_group_member_service(db: Session, current_user: User, group_id: int, us
     
     if target_member.role == "owner":
         raise ForbiddenException("不能禁言群主")
+    
+    # 管理员不能禁言其他管理员（除非群主操作）
+    if target_member.role == "admin" and current_member.role != "owner":
+        raise ForbiddenException("只有群主可以禁言管理员")
     
     success = mute_group_member(db, group_id, user_id, mute_hours)
     if not success:
