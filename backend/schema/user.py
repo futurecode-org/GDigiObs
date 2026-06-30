@@ -26,6 +26,8 @@ class UserResponse(BaseModel):
     """用户响应"""
     id: int = Field(..., description="用户ID")
     tenant_id: Optional[int] = Field(None, description="租户ID")
+    tenant_name: Optional[str] = Field(None, description="租户名称")
+    department_name: Optional[str] = Field(None, description="部门名称")
     username: str = Field(..., description="用户名")
     email: Optional[str] = Field(None, description="邮箱")
     phone: Optional[str] = Field(None, description="手机号")
@@ -33,12 +35,50 @@ class UserResponse(BaseModel):
     avatar_file_id: Optional[int] = Field(None, description="头像文件ID")
     user_type: str = Field(..., description="用户类型")
     status: str = Field(..., description="状态")
+    roles: Optional[List[str]] = Field(default_factory=list, description="角色列表")
+    is_super_admin: bool = Field(default=False, description="是否超级管理员")
+    is_tenant_admin: bool = Field(default=False, description="是否租户管理员")
     last_login_at: Optional[datetime] = Field(None, description="最后登录时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: Optional[datetime] = Field(None, description="更新时间")
     
     class Config:
         from_attributes = True
+        
+    @classmethod
+    def from_orm_with_roles(cls, user, db=None):
+        """从ORM对象创建，自动填充角色信息"""
+        data = {
+            "id": user.id,
+            "tenant_id": user.tenant_id,
+            "tenant_name": getattr(user, "tenant_name", None),
+            "department_name": getattr(user, "department_name", None),
+            "username": user.username,
+            "email": user.email,
+            "phone": user.phone,
+            "nickname": user.nickname,
+            "avatar_file_id": user.avatar_file_id,
+            "user_type": user.user_type,
+            "status": user.status,
+            "last_login_at": user.last_login_at,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+        }
+        
+        # 如果有db连接，查询角色信息
+        if db:
+            from dao.rbac_dao import get_user_roles
+            roles = get_user_roles(db, user.id)
+            role_codes = [r.code for r in roles]
+            data["roles"] = role_codes
+            data["is_super_admin"] = "super_admin" in role_codes
+            data["is_tenant_admin"] = "tenant_admin" in role_codes
+        else:
+            data["roles"] = []
+            data["is_super_admin"] = False
+            data["is_tenant_admin"] = False
+            
+        return cls(**data)
 
 
 class UserListResponse(BaseModel):

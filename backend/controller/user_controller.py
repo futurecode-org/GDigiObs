@@ -1,11 +1,17 @@
+"""用户管理控制器"""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from database.session import get_db
 from schema.user import UserResponse, UserUpdate, UserCreate, UserListResponse, AssignRoleRequest
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
 from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext
-from service.user_service import get_user_list, get_user_detail, update_user_profile, assign_roles_to_user, disable_user, ban_user, search_users
+from service.user_service import (
+    get_user_list, get_user_detail, update_user_profile, assign_roles_to_user, 
+    disable_user, enable_user, ban_user, unban_user, search_users, 
+    create_new_user, reset_user_password, delete_user, get_user_roles_info
+)
 
 from model.user import User
 
@@ -18,7 +24,7 @@ def list_users(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    ctx = require_permission("user:view")
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """
     获取用户列表
@@ -29,7 +35,7 @@ def list_users(
     """
     result = get_user_list(db, ctx, page, page_size)
     paginated = PaginatedData(
-        items=[UserResponse.model_validate(u) for u in result["items"]],
+        items=[UserResponse.from_orm_with_roles(u, db) for u in result["items"]],
         total=result["total"],
         page=result["page"],
         page_size=result["page_size"],
@@ -44,26 +50,15 @@ def search_user_endpoint(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """
     搜索用户（用于添加好友等场景）
     
     - 支持按用户名或昵称搜索
     - 自动排除当前用户
-    - 仅搜索同一租户下的用户
     - 支持分页
     """
-    from core.dependencies import RequestContext
-    
-    # 构造 RequestContext
-    ctx = RequestContext(
-        user_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-        username=current_user.username or "",
-        is_super_admin=current_user.user_type == "admin"
-    )
-    
     result = search_users(db, ctx, keyword, page, page_size)
     paginated = PaginatedData(
         items=[UserResponse.model_validate(u) for u in result["items"]],
@@ -75,7 +70,22 @@ def search_user_endpoint(
     return PaginatedResponse.success(data=paginated)
 
 
-# 个人中心相关接口
+@user_router.post("", summary="创建用户")
+def create_user(
+    data: UserCreate,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """
+    创建新用户（管理员操作）
+    
+    - 管理员可在租户内创建用户
+    - 支持指定用户类型
+    """
+    user = create_new_user(db, data, ctx)
+    return ApiResponse.success(data=UserResponse.model_validate(user))
+
+
 @user_router.get("/me", summary="获取当前用户信息", deprecated=True)
 def get_me_redirect(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
@@ -90,7 +100,7 @@ def get_me_redirect(db: Session = Depends(get_db), current_user: User = Depends(
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """
     获取用户详情
@@ -98,8 +108,8 @@ def get_user(
     - 用户只能查看自己的信息
     - 管理员可查看租户下用户信息
     """
-    user = get_user_detail(db, user_id, current_user)
-    return ApiResponse.success(data=UserResponse.model_validate(user))
+    user = get_user_detail(db, user_id, ctx)
+    return ApiResponse.success(data=UserResponse.from_orm_with_roles(user, db))
 
 
 @user_router.put("/{user_id}", summary="更新用户")
@@ -107,7 +117,7 @@ def update_user(
     user_id: int,
     data: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """
     更新用户信息
@@ -115,7 +125,7 @@ def update_user(
     - 用户只能修改自己的昵称、头像等
     - 管理员可修改租户下用户信息
     """
-    user = update_user_profile(db, user_id, data, current_user)
+    user = update_user_profile(db, user_id, data, ctx)
     return ApiResponse.success(data=UserResponse.model_validate(user))
 
 
@@ -124,7 +134,7 @@ def assign_roles(
     user_id: int,
     data: AssignRoleRequest,
     db: Session = Depends(get_db),
-    ctx = require_permission("user:assign_role")
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """
     为用户分配角色
@@ -137,11 +147,24 @@ def assign_roles(
     return ApiResponse.success(message="角色分配成功")
 
 
+@user_router.get("/{user_id}/roles", summary="用户角色")
+def get_user_roles(
+    user_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """
+    获取用户的角色列表
+    """
+    roles = get_user_roles_info(db, user_id, ctx)
+    return ApiResponse.success(data=roles)
+
+
 @user_router.post("/{user_id}/disable", summary="禁用用户")
 def disable(
     user_id: int,
     db: Session = Depends(get_db),
-    ctx = require_permission("user:disable")
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """
     禁用用户
@@ -153,11 +176,26 @@ def disable(
     return ApiResponse.success(message="用户已禁用")
 
 
+@user_router.post("/{user_id}/enable", summary="启用用户")
+def enable(
+    user_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """
+    启用用户
+    
+    - 管理员可启用租户下用户
+    """
+    enable_user(db, user_id, ctx)
+    return ApiResponse.success(message="用户已启用")
+
+
 @user_router.post("/{user_id}/ban", summary="封禁用户")
 def ban(
     user_id: int,
     db: Session = Depends(get_db),
-    ctx = require_permission("user:ban")
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """
     封禁用户
@@ -167,3 +205,51 @@ def ban(
     """
     ban_user(db, user_id, ctx)
     return ApiResponse.success(message="用户已封禁")
+
+
+@user_router.post("/{user_id}/unban", summary="解封用户")
+def unban(
+    user_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """
+    解封用户
+    
+    - 管理员可解封租户下用户
+    """
+    unban_user(db, user_id, ctx)
+    return ApiResponse.success(message="用户已解封")
+
+
+@user_router.post("/{user_id}/reset-password", summary="重置密码")
+def reset_password(
+    user_id: int,
+    new_password: str,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """
+    重置用户密码
+    
+    - 管理员可重置租户下用户密码
+    - 重置后用户需重新登录
+    """
+    user = reset_user_password(db, user_id, new_password, ctx)
+    return ApiResponse.success(data=UserResponse.model_validate(user))
+
+
+@user_router.delete("/{user_id}", summary="删除用户")
+def delete(
+    user_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """
+    删除用户（软删除）
+    
+    - 管理员可删除租户下用户
+    - 不能删除自己
+    """
+    delete_user(db, user_id, ctx)
+    return ApiResponse.success(message="用户已删除")
