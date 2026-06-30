@@ -23,11 +23,13 @@ import type {
   Message,
   ModelConfig,
   Notification,
+  NotificationSetting,
   OperationLog,
   PaginatedData,
   Permission,
   Role,
   Skill,
+  SystemEmailConfig,
   Tenant,
   TokenResponse,
   User,
@@ -412,6 +414,9 @@ export const userApi = {
   create: (data: unknown): Promise<User> =>
     post("/users", data),
 
+  update: (userId: number, data: unknown): Promise<User> =>
+    put(`/users/${userId}`, data),
+
   assignRoles: (userId: number, roleIds: number[]): Promise<void> =>
     post(`/users/${userId}/roles`, { role_ids: roleIds }),
 
@@ -721,10 +726,75 @@ export const modelApi = {
     post(`/models/${modelId}/test`),
 };
 
+export const notificationSettingApi = {
+  getSettings: (): Promise<NotificationSetting> =>
+    get("/notifications/settings"),
+
+  updateSettings: (data: Partial<NotificationSetting>): Promise<NotificationSetting> =>
+    put("/notifications/settings", data),
+};
+
+export const systemEmailConfigApi = {
+  getList: (): Promise<SystemEmailConfig[]> =>
+    get("/notifications/admin/email-configs"),
+
+  create: (data: Omit<SystemEmailConfig, "id" | "created_at" | "updated_at">): Promise<SystemEmailConfig> =>
+    post("/notifications/admin/email-configs", data),
+
+  update: (id: number, data: Partial<SystemEmailConfig>): Promise<SystemEmailConfig> =>
+    put(`/notifications/admin/email-configs/${id}`, data),
+
+  delete: (id: number): Promise<void> =>
+    del(`/notifications/admin/email-configs/${id}`),
+
+  test: (data: {
+    smtp_host: string;
+    smtp_port: number;
+    smtp_username: string;
+    smtp_password: string;
+    sender_email: string;
+    sender_name?: string;
+    security_protocol: string;
+  }): Promise<{ message: string }> =>
+    post("/notifications/admin/email-configs/test", data),
+};
+
+export const adminNotificationApi = {
+  send: (data: { title: string; content: string; notification_type?: string; target_type?: string; target_id?: number; target_ids?: number[]; channel?: string; email_config_id?: number; recipient_emails?: string[]; data?: unknown }): Promise<{ sent_count: number }> =>
+    post("/notifications/admin/send", data),
+};
+
 export const difyApi = {
   getProviders: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<DifyProvider>> =>
     get("/dify/providers", params),
 
-  getApps: (params?: { provider_id?: number; page?: number; page_size?: number }): Promise<PaginatedData<DifyApp>> =>
+  createProvider: (data: { name: string; base_url: string; api_key: string; visibility?: string; status?: string; remark?: string }): Promise<DifyProvider> =>
+    post("/dify/providers", data),
+
+  updateProvider: (id: number, data: Partial<DifyProvider>): Promise<DifyProvider> =>
+    put(`/dify/providers/${id}`, data),
+
+  deleteProvider: (id: number): Promise<void> =>
+    del(`/dify/providers/${id}`),
+
+  testProvider: (id: number): Promise<{ success: boolean }> =>
+    post(`/dify/providers/${id}/test`),
+
+  getApps: (params?: { app_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<DifyApp>> =>
     get("/dify/apps", params),
+
+  getProviderApps: (providerId: number): Promise<PaginatedData<DifyApp>> =>
+    get(`/dify/providers/${providerId}/apps`),
+
+  createApp: (data: { name: string; provider_id: number; app_type: string; api_endpoint: string; response_mode?: string; input_schema?: unknown; output_schema?: unknown; default_inputs?: unknown; conversation_enabled?: boolean; visibility?: string; status?: string }): Promise<DifyApp> =>
+    post("/dify/apps", data),
+
+  updateApp: (id: number, data: Partial<DifyApp>): Promise<DifyApp> =>
+    put(`/dify/apps/${id}`, data),
+
+  deleteApp: (id: number): Promise<void> =>
+    del(`/dify/apps/${id}`),
+
+  testApp: (id: number): Promise<{ success: boolean; message?: string }> =>
+    post(`/dify/apps/${id}/test`),
 };

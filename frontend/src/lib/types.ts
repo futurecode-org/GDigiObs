@@ -550,6 +550,60 @@ export interface DifyApp {
   updated_at: string;
 }
 
+export interface NotificationSetting {
+  id: number;
+  user_id: number;
+  browser_enabled: boolean;
+  email_enabled: boolean;
+  scene_settings?: Record<string, { browser?: boolean; email?: boolean }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SystemEmailConfig {
+  id: number;
+  tenant_id?: number;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_password: string;
+  sender_email: string;
+  sender_name?: string;
+  security_protocol: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DifyProvider {
+  id: number;
+  name: string;
+  base_url: string;
+  visibility: string;
+  status: string;
+  remark?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DifyApp {
+  id: number;
+  name: string;
+  provider_id: number;
+  app_type: string;
+  api_endpoint: string;
+  response_mode: string;
+  input_schema?: unknown;
+  output_schema?: unknown;
+  default_inputs?: unknown;
+  conversation_enabled: boolean;
+  visibility: string;
+  review_status: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type UserPage = 
   | "dashboard"
   | "messages"

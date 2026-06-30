@@ -28,6 +28,11 @@ class RequestContext(BaseModel):
     
     class Config:
         arbitrary_types_allowed = True
+        
+    @property
+    def is_admin(self) -> bool:
+        """是否为管理员（超级管理员、租户管理员或admin角色）"""
+        return self.is_super_admin or self.is_tenant_admin or "admin" in self.roles
 
 
 def get_token_payload(token: str) -> dict:

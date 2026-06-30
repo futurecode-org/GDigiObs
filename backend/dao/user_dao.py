@@ -29,6 +29,19 @@ def get_user_by_phone(db: Session, phone: str) -> Optional[User]:
     return db.query(User).filter(User.phone == phone, User.deleted_at.is_(None)).first()
 
 
+def get_users(db: Session, tenant_id: int = None, status: str = None, page: int = 1, page_size: int = 1000) -> List[User]:
+    """查询用户列表"""
+    query = db.query(User).filter(User.deleted_at.is_(None))
+    
+    if tenant_id is not None:
+        query = query.filter(User.tenant_id == tenant_id)
+    
+    if status:
+        query = query.filter(User.status == status)
+    
+    return query.offset((page - 1) * page_size).limit(page_size).all()
+
+
 def get_users_by_tenant(db: Session, tenant_id: int, page: int = 1, page_size: int = 20) -> List[User]:
     """查询租户下的用户列表"""
     query = db.query(User).filter(User.tenant_id == tenant_id, User.deleted_at.is_(None))
