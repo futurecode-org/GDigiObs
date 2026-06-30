@@ -39,14 +39,20 @@ def get_group_by_id(db: Session, group_id: int) -> Optional[Group]:
     return db.query(Group).filter(Group.id == group_id).first()
 
 
-def get_user_groups(db: Session, user_id: int, tenant_id: int) -> List[Group]:
-    """获取用户所在的所有群组"""
-    groups = db.query(Group).join(GroupMember).filter(
-        Group.tenant_id == tenant_id,
+def get_user_groups(db: Session, user_id: int, tenant_id: int = None) -> List[Group]:
+    """获取用户所在的所有群组
+
+    只要用户是该群的正常成员即可看到，不按当前用户的租户过滤——
+    跨租户邀请进群是合法场景，群组本身归属于创建者所在租户，
+    若按 Group.tenant_id == current_user.tenant_id 过滤会导致被邀请进群
+    的跨租户用户在“联系人->群组”中看不到自己已加入的群。
+    （tenant_id 参数仅为兼容旧签名而保留，不再参与过滤。）
+    """
+    return db.query(Group).join(GroupMember).filter(
         GroupMember.user_id == user_id,
-        GroupMember.status == "normal"
+        GroupMember.status == "normal",
+        Group.status == "normal"
     ).all()
-    return groups
 
 
 def get_group_members(db: Session, group_id: int) -> List[GroupMember]:

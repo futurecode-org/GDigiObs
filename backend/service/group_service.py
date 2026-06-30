@@ -82,11 +82,13 @@ def get_group_detail(db: Session, current_user: User, group_id: int) -> Dict:
     group = get_group_by_id(db, group_id)
     if not group:
         raise NotFoundException("群组不存在")
-    
-    # 检查租户
-    if group.tenant_id != current_user.tenant_id:
+
+    # 权限校验：群成员可查看本群详情。
+    # 不再用租户隔离，因为跨租户邀请进群是合法场景——按租户判断会把
+    # 被邀请进群的跨租户成员误拒之门外。
+    if not is_group_member(db, group_id, current_user.id):
         raise ForbiddenException("无权访问此群组")
-    
+
     # 获取成员信息
     members = get_group_members(db, group_id)
     member_info = []
