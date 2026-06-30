@@ -21,6 +21,7 @@ class ModelConfig(Base, BaseModelMixin):
     context_length = Column(Integer, default=4096, comment="上下文长度")
     max_tokens = Column(Integer, default=2048, comment="最大Token")
     default_config = Column(JSON, nullable=True, comment="默认参数配置")
+    temperature = Column(JSON, nullable=True, comment="默认温度")
     visibility = Column(String(20), default="tenant", comment="可见范围: platform/tenant/personal")
     status = Column(String(20), default="enabled", comment="状态")
     deleted_at = Column(DateTime, nullable=True, comment="删除时间")
