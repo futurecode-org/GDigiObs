@@ -22,7 +22,12 @@ from controller.file_controller import file_router
 from controller.audit_controller import audit_router, ask_router
 from controller.dify_controller import dify_router, assistant_router
 from controller.ws_controller import ws_router
-from core.exceptions import BusinessException, business_exception_handler, generic_exception_handler, http_exception_handler
+from core.exceptions import (
+    BusinessException,
+    business_exception_handler,
+    generic_exception_handler,
+    http_exception_handler,
+)
 from core.response import ApiResponse
 from core.config import settings
 from service.auth_service import init_system
@@ -31,20 +36,30 @@ from service.auth_service import init_system
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时：创建数据库表
-    Base.metadata.create_all(bind=engine)
-    
+    # 启动时：初始化数据库（创建缺失表 + 添加缺失列）
+    from database.migrate import init_database
+
+    init_database()
+
     # 初始化系统角色和权限
     db = Session()
     try:
         init_system(db)
     finally:
         db.close()
-    
+
+    # 启动采集调度器
+    from service.scheduler_service import start_scheduler, load_scheduled_tasks
+
+    await start_scheduler()
+    await load_scheduled_tasks()
+
     yield
-    
-    # 关闭时：清理资源（如有需要）
-    pass
+
+    # 关闭时：停止调度器
+    from service.scheduler_service import shutdown_scheduler
+
+    await shutdown_scheduler()
 
 
 # 创建FastAPI应用
@@ -52,7 +67,7 @@ app = FastAPI(
     title="数智瞭望系统 API",
     description="数智瞭望系统后端服务 - 多租户、RBAC权限、即时通讯、智能问数、知识库、数字员工、工作流",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS 配置 - 从环境变量读取
@@ -102,7 +117,7 @@ def read_root():
             "name": "数智瞭望系统 API",
             "version": "1.0.0",
             "docs": "/docs",
-            "redoc": "/redoc"
+            "redoc": "/redoc",
         }
     )
 
@@ -115,4 +130,5 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host=settings.UVICORN_HOST, port=settings.UVICORN_PORT)

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState } from "react";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { Toaster } from "@/components/ui/sonner";
 import { AdminApp } from "./apps/admin/AdminApp";
 import { UserApp } from "./apps/user/UserApp";
 import { LoginPage } from "./apps/common/LoginPage";
@@ -57,6 +58,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppContent />
+        <Toaster position="top-center" />
       </AuthProvider>
     </BrowserRouter>
   );

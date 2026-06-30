@@ -279,38 +279,76 @@ export interface CollectPlatform {
   name: string;
   platform_type: string;
   default_method: string;
-  config_schema?: unknown;
+  config_schema?: Record<string, unknown>;
+  description?: string;
+  status: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface CollectTask {
   id: number;
+  tenant_id: number;
   name: string;
   platform_id: number;
-  platform_name: string;
+  platform_name?: string;
+  platform_type?: string;
   collect_method: string;
   source_url?: string;
-  request_config?: unknown;
-  parse_rule?: unknown;
-  schedule_config?: unknown;
+  request_config?: Record<string, unknown>;
+  parse_rule?: Record<string, unknown>;
+  schedule_config?: ScheduleConfig;
   is_public: boolean;
   status: string;
-  collected_count: number;
+  last_run_at?: string;
+  fail_count: number;
   created_by: number;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+}
+
+export interface ScheduleConfig {
+  cron?: string;
+  interval?: "daily" | "weekly" | "monthly";
+  hour?: number;
+  minute?: number;
+  day_of_week?: string;
+  day?: number;
 }
 
 export interface CollectedItem {
   id: number;
+  tenant_id: number;
   task_id: number;
-  task_name: string;
-  source_url: string;
-  content: string;
-  status: "raw" | "cleaned" | "analyzed";
-  metadata?: unknown;
-  collected_at: string;
+  title?: string;
+  content?: string;
+  author?: string;
+  publish_at?: string;
+  source_platform?: string;
+  source_url?: string;
+  raw_content_type?: string;
+  attachments?: Array<{ type: string; url: string; name?: string }>;
+  sentiment?: string;
+  tags?: Record<string, unknown>;
+  entities?: Record<string, unknown>;
+  is_public: boolean;
+  status: string;
+  created_at: string;
+}
+
+export interface CollectedItemDetail extends CollectedItem {
+  raw_content?: string;
+}
+
+export interface CollectLog {
+  id: number;
+  tenant_id: number;
+  task_id: number;
+  run_at: string;
+  status: string;
+  items_count: number;
+  error_message?: string;
+  duration_seconds?: number;
   created_at: string;
 }
 
