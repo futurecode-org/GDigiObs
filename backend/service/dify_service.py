@@ -12,7 +12,11 @@ from dao.dify_dao import (
     delete_dify_app, count_dify_apps, get_dify_conversation,
     create_dify_conversation, get_dify_call_logs, create_dify_call_log,
     get_chat_assistants, get_chat_assistant_by_id, create_chat_assistant,
-    update_chat_assistant, delete_chat_assistant, count_chat_assistants
+    update_chat_assistant, delete_chat_assistant, count_chat_assistants,
+    get_dify_apps_by_provider
+)
+from schema.dify import (
+    DifyProviderResponse, DifyAppResponse, DifyCallLogResponse, ChatAssistantResponse
 )
 from core.security import encrypt_api_key
 from core.dify_client import DifyClient
@@ -22,13 +26,30 @@ from core.dependencies import RequestContext
 logger = logging.getLogger(__name__)
 
 
+def get_apps_by_provider_service(db: Session, ctx: RequestContext, provider_id: int) -> Dict:
+    """获取某 Provider 下的 Dify App 列表"""
+    provider = get_dify_provider_by_id(db, provider_id)
+    if not provider:
+        raise NotFoundException("Provider不存在")
+    
+    if provider.visibility != "platform" and provider.tenant_id != ctx.tenant_id:
+        raise ForbiddenException("无权限访问")
+    
+    apps = get_dify_apps_by_provider(db, provider_id)
+    return {
+        "items": [DifyAppResponse.model_validate(a) for a in apps],
+        "total": len(apps)
+    }
+
+
 def get_providers_service(db: Session, ctx: RequestContext, page: int = 1, page_size: int = 20) -> Dict:
     """获取 Dify Provider 列表"""
+    from schema.dify import DifyProviderResponse
     providers = get_dify_providers(db, ctx.tenant_id, page, page_size)
     total = count_dify_providers(db, ctx.tenant_id)
     
     return {
-        "items": providers,
+        "items": [DifyProviderResponse.model_validate(p) for p in providers],
         "total": total,
         "page": page,
         "page_size": page_size
@@ -113,7 +134,7 @@ def get_apps_service(db: Session, ctx: RequestContext, app_type: str = None,
     total = count_dify_apps(db, ctx.tenant_id, app_type)
     
     return {
-        "items": apps,
+        "items": [DifyAppResponse.model_validate(a) for a in apps],
         "total": total,
         "page": page,
         "page_size": page_size
@@ -351,7 +372,7 @@ def get_call_logs_service(db: Session, ctx: RequestContext, dify_app_id: int = N
     total = len(logs)
     
     return {
-        "items": logs,
+        "items": [DifyCallLogResponse.model_validate(l) for l in logs],
         "total": total,
         "page": page,
         "page_size": page_size
@@ -364,7 +385,7 @@ def get_assistants_service(db: Session, ctx: RequestContext, page: int = 1, page
     total = count_chat_assistants(db, ctx.tenant_id)
     
     return {
-        "items": assistants,
+        "items": [ChatAssistantResponse.model_validate(a) for a in assistants],
         "total": total,
         "page": page,
         "page_size": page_size

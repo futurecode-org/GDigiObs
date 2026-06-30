@@ -60,6 +60,14 @@ def delete_dify_provider(db: Session, provider_id: int) -> bool:
     return True
 
 
+def get_dify_apps_by_provider(db: Session, provider_id: int, page: int = 1, page_size: int = 100) -> List[DifyApp]:
+    """获取某 Provider 下的 Dify App 列表"""
+    return db.query(DifyApp).filter(
+        DifyApp.provider_id == provider_id,
+        DifyApp.status != "deleted"
+    ).order_by(desc(DifyApp.created_at)).offset((page - 1) * page_size).limit(page_size).all()
+
+
 def count_dify_providers(db: Session, tenant_id: int = None) -> int:
     """统计 Dify Provider 数量"""
     query = db.query(DifyProvider).filter(DifyProvider.status != "deleted")

@@ -22,7 +22,8 @@ from service.dify_service import (
     delete_app_service, invoke_app_service, stream_invoke_app_service,
     test_app_service, get_call_logs_service,
     get_assistants_service, get_assistant_service, create_assistant_service,
-    update_assistant_service, delete_assistant_service, chat_with_assistant_service
+    update_assistant_service, delete_assistant_service, chat_with_assistant_service,
+    get_apps_by_provider_service
 )
 
 dify_router = APIRouter(prefix="/dify", tags=["Dify"])
@@ -88,6 +89,16 @@ async def test_provider(
     ctx: RequestContext = Depends(get_request_context)
 ):
     result = await test_provider_service(db, ctx, provider_id)
+    return ApiResponse.success(data=result)
+
+
+@dify_router.get("/providers/{provider_id}/apps", summary="获取 Provider 下的 App 列表")
+def get_provider_apps(
+    provider_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    result = get_apps_by_provider_service(db, ctx, provider_id)
     return ApiResponse.success(data=result)
 
 

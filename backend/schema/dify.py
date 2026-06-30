@@ -25,6 +25,7 @@ class DifyProviderUpdate(BaseModel):
 
 class DifyProviderResponse(BaseModel):
     """Dify Provider 响应"""
+    model_config = {"from_attributes": True}
     id: int
     name: str
     base_url: str
@@ -66,6 +67,7 @@ class DifyAppUpdate(BaseModel):
 
 class DifyAppResponse(BaseModel):
     """Dify App 响应"""
+    model_config = {"from_attributes": True}
     id: int
     name: str
     provider_id: int
@@ -153,6 +155,7 @@ class ChatAssistantUpdate(BaseModel):
 
 class ChatAssistantResponse(BaseModel):
     """聊天助手响应"""
+    model_config = {"from_attributes": True}
     id: int
     name: str
     avatar_file_id: Optional[int]
