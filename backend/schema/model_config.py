@@ -1,4 +1,3 @@
-"""模型配置相关数据模型"""
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from datetime import datetime
@@ -18,6 +17,7 @@ class ModelConfigCreate(BaseModel):
     context_length: int = Field(4096, description="上下文长度")
     max_tokens: int = Field(2048, description="最大Token")
     default_config: Optional[Dict] = Field(None, description="默认参数配置")
+    temperature: Optional[float] = Field(0.7, ge=0, le=2, description="默认温度")
     visibility: str = Field("tenant", description="可见范围: platform/tenant/personal")
 
 
@@ -33,6 +33,7 @@ class ModelConfigUpdate(BaseModel):
     context_length: Optional[int] = None
     max_tokens: Optional[int] = None
     default_config: Optional[Dict] = None
+    temperature: Optional[float] = None
     visibility: Optional[str] = None
 
 
@@ -52,6 +53,7 @@ class ModelConfigResponse(BaseModel):
     context_length: int
     max_tokens: int
     default_config: Optional[Dict] = None
+    temperature: Optional[float] = None
     visibility: str
     status: str
     created_at: datetime
@@ -66,3 +68,12 @@ class ModelConfigListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ModelConnectivityTest(BaseModel):
+    """模型连通性测试请求"""
+    base_url: str = Field(..., max_length=500, description="API地址")
+    api_key: Optional[str] = Field(None, description="API Key")
+    model_key: str = Field(..., max_length=100, description="模型标识")
+    api_type: str = Field("openai", description="API类型: openai/anthropic/ollama/custom")
+    max_tokens: Optional[int] = Field(10, description="测试时最大Token数")
