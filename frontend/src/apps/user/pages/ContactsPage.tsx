@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/auth";
 import { Search, Plus, User, Users, Hash, Check, X, Loader2, Bell, Send, Users2, Shield, UserMinus, Crown, Trash2, LogOut, Info, MessageSquare, Edit3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,9 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
   const [showMuteDialog, setShowMuteDialog] = useState(false);
   const [muteTargetUserId, setMuteTargetUserId] = useState<number | null>(null);
   const [muteDuration, setMuteDuration] = useState(60);
+  const [groupDetailTab, setGroupDetailTab] = useState<"members" | "applications" | "announcements">("members");
+
+  const { user } = useAuth();
 
   useEffect(() => {
     if (activeTab === "friends") {
@@ -88,8 +92,9 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
   useEffect(() => {
     if (selectedGroup) {
       fetchGroupDetail(selectedGroup.id);
+      setGroupDetailTab("members");
     }
-  }, [selectedGroup]);
+  }, [selectedGroup?.id]);
 
   const fetchFriends = async () => {
     setIsLoading(true);
@@ -137,6 +142,8 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
   };
 
   const fetchGroupDetail = async (groupId: number) => {
+    if (!groupId || isNaN(groupId)) return;
+    if (!user) return;
     try {
       const group = await groupApi.getDetail(groupId);
       setSelectedGroup(group);
@@ -148,9 +155,9 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
       const applications = await groupApi.getJoinApplications(groupId);
       setJoinApplications(applications as GroupJoinApplication[]);
 
-      const currentUser = JSON.parse(localStorage.getItem("gdigi_user") || "{}");
-      const myMember = group.members?.find(m => m.user_id === currentUser.id);
-      setMyGroupRole(myMember?.role || "member");
+      const myMember = group.members?.find(m => m.user_id === user?.id);
+      const role = myMember?.role || "member";
+      setMyGroupRole(role);
     } catch {}
   };
 
@@ -160,12 +167,10 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
       return;
     }
     try {
-      const result = await userApi.getList({ page: 1, page_size: 10 });
+      const result = await userApi.search(keyword, { page: 1, page_size: 10 });
       const data = result as any;
       const items = data.items || [];
-      setAvailableUsers(items.filter((u: UserType) => 
-        u.username?.includes(keyword) || u.nickname?.includes(keyword)
-      ));
+      setAvailableUsers(items);
     } catch {
       setAvailableUsers([]);
     }
@@ -299,6 +304,17 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
     } catch {}
   };
 
+  const handleDeleteAnnouncement = async (groupId: number, announcementId: number) => {
+    try {
+      await groupApi.deactivateAnnouncement(announcementId);
+      fetchGroupDetail(groupId);
+      toast.success("公告已删除");
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || "删除公告失败";
+      toast.error(message);
+    }
+  };
+
   const handleAcceptJoinApplication = async (groupId: number, applicationId: number) => {
     try {
       await groupApi.acceptJoinApplication(groupId, applicationId);
@@ -324,7 +340,11 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
       setSearchUsers("");
       setAvailableUsers([]);
       fetchGroupDetail(selectedGroup.id);
-    } catch {}
+      toast.success("邀请已发送");
+    } catch (err: any) {
+      const message = err?.message || "邀请失败";
+      toast.error(message);
+    }
   };
 
   const handleAcceptInvitation = async (invitationId: number) => {
@@ -394,7 +414,11 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
       setShowGroupDetail(false);
       setSelectedGroup(null);
       fetchGroups();
-    } catch {}
+      toast.success("群组已解散");
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || "解散群组失败";
+      toast.error(message);
+    }
   };
 
   const handleTransferOwner = async () => {
@@ -456,7 +480,7 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
             <div className="flex gap-1">
               <Dialog open={showSearchUserDialog} onOpenChange={setShowSearchUserDialog}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="xs"><Search className="w-4 h-4" /></Button>
+                  <Button variant="outline" size="sm"><Search className="w-4 h-4" /></Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
@@ -485,7 +509,7 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
                               <p className="text-xs text-muted-foreground">{user.email || "-"}</p>
                             </div>
                           </div>
-                          <Button variant="default" size="xs" onClick={() => handleOpenApplyDialog(user)}><Send className="w-3 h-3" /> 添加</Button>
+                          <Button variant="default" size="sm" onClick={() => handleOpenApplyDialog(user)}><Send className="w-3 h-3" /> 添加</Button>
                         </div>
                       ))}
                       {searchResults.length === 0 && searchKeyword && (
@@ -498,7 +522,7 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
 
               <Dialog open={showCreateGroupDialog} onOpenChange={setShowCreateGroupDialog}>
                 <DialogTrigger asChild>
-                  <Button variant="default" size="xs"><Plus className="w-4 h-4" /></Button>
+                  <Button variant="default" size="sm"><Plus className="w-4 h-4" /></Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
@@ -706,8 +730,8 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
                         </div>
                       </div>
                       <div className="flex gap-2 mt-2">
-                        <Button variant="default" size="xs" className="flex-1" onClick={() => handleAcceptInvitation(invitation.id)}><Check className="w-3 h-3" /> 接受</Button>
-                        <Button variant="outline" size="xs" className="flex-1" onClick={() => handleRejectInvitation(invitation.id)}><X className="w-3 h-3" /> 拒绝</Button>
+                        <Button variant="default" size="sm" className="flex-1" onClick={() => handleAcceptInvitation(invitation.id)}><Check className="w-3 h-3" /> 接受</Button>
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleRejectInvitation(invitation.id)}><X className="w-3 h-3" /> 拒绝</Button>
                       </div>
                     </div>
                   ))}
@@ -747,8 +771,8 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
                         </div>
                       </div>
                       <div className="flex gap-2 mt-2">
-                        <Button variant="default" size="xs" className="flex-1" onClick={() => handleAccept(req.id)}><Check className="w-3 h-3" /> 接受</Button>
-                        <Button variant="outline" size="xs" className="flex-1" onClick={() => handleReject(req.id)}><X className="w-3 h-3" /> 拒绝</Button>
+                        <Button variant="default" size="sm" className="flex-1" onClick={() => handleAccept(req.id)}><Check className="w-3 h-3" /> 接受</Button>
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => handleReject(req.id)}><X className="w-3 h-3" /> 拒绝</Button>
                       </div>
                     </div>
                   )})}
@@ -786,17 +810,42 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
                   <DropdownMenuContent align="end" className="w-48">
                     {myGroupRole === "owner" && (
                       <>
-                        <DropdownMenuItem onClick={() => setShowTransferOwnerDialog(true)}>
+                        <DropdownMenuItem onSelect={() => {
+                          setGroupDetailTab("members");
+                          if (selectedGroup) {
+                            fetchGroupDetail(selectedGroup.id);
+                          }
+                        }}>
+                          <Users2 className="w-4 h-4 mr-2" /> 管理成员
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setShowTransferOwnerDialog(true)}>
                           <Crown className="w-4 h-4 mr-2" /> 转让群主
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600" onClick={() => handleDissolveGroup(selectedGroup.id)}>
+                        <DropdownMenuItem className="text-red-600" onSelect={() => handleDissolveGroup(selectedGroup.id)}>
                           <Trash2 className="w-4 h-4 mr-2" /> 解散群组
                         </DropdownMenuItem>
                       </>
                     )}
-                    <DropdownMenuItem onClick={() => handleLeaveGroup(selectedGroup.id)}>
-                      <LogOut className="w-4 h-4 mr-2" /> 退出群聊
-                    </DropdownMenuItem>
+                    {myGroupRole === "admin" && (
+                      <>
+                        <DropdownMenuItem onSelect={() => {
+                          setGroupDetailTab("members");
+                          if (selectedGroup) {
+                            fetchGroupDetail(selectedGroup.id);
+                          }
+                        }}>
+                          <Users2 className="w-4 h-4 mr-2" /> 管理成员
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => handleLeaveGroup(selectedGroup.id)}>
+                          <LogOut className="w-4 h-4 mr-2" /> 退出群聊
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {myGroupRole === "member" && (
+                      <DropdownMenuItem onSelect={() => handleLeaveGroup(selectedGroup.id)}>
+                        <LogOut className="w-4 h-4 mr-2" /> 退出群聊
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Button variant="ghost" size="sm" onClick={() => {
@@ -807,181 +856,240 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
             </div>
 
             <div className="flex border-b border-border">
-              <button className={cn("flex-1 py-3 text-xs font-medium transition-colors", activeTab === "groups" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground")}>
+              <button 
+                className={cn("flex-1 py-3 text-xs font-medium transition-colors", groupDetailTab === "members" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground")}
+                onClick={() => setGroupDetailTab("members")}
+              >
                 <Users2 className="w-4 h-4 inline mr-1" /> 成员
               </button>
-              <button className={cn("flex-1 py-3 text-xs font-medium transition-colors", joinApplications.filter(a => a.status === "pending").length > 0 ? "text-primary" : "text-muted-foreground hover:text-foreground")}>
+              <button 
+                className={cn("flex-1 py-3 text-xs font-medium transition-colors", groupDetailTab === "applications" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground")}
+                onClick={() => setGroupDetailTab("applications")}
+              >
                 <Users className="w-4 h-4 inline mr-1" /> 入群申请
                 {joinApplications.filter(a => a.status === "pending").length > 0 && (
                   <Badge variant="destructive" className="ml-1">{joinApplications.filter(a => a.status === "pending").length}</Badge>
                 )}
               </button>
-              <button className="flex-1 py-3 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+              <button 
+                className={cn("flex-1 py-3 text-xs font-medium transition-colors", groupDetailTab === "announcements" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground")}
+                onClick={() => setGroupDetailTab("announcements")}
+              >
                 <Bell className="w-4 h-4 inline mr-1" /> 公告
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
-              <div className="mb-4 flex gap-2">
-                <Dialog open={showAnnouncementDialog} onOpenChange={setShowAnnouncementDialog}>
-                  <DialogTrigger asChild>
-                    <Button variant="default" size="sm"><Bell className="w-4 h-4 mr-2" />发布公告</Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>发布群公告</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 mt-4">
-                      <Textarea
-                        value={announcementContent}
-                        onChange={e => setAnnouncementContent(e.target.value)}
-                        placeholder="输入公告内容..."
-                        rows={4}
-                      />
-                      <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setShowAnnouncementDialog(false)}>取消</Button>
-                        <Button onClick={handleCreateAnnouncement} disabled={!announcementContent.trim()}>发布</Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm"><Send className="w-4 h-4 mr-2" />邀请成员</Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                      <DialogTitle>邀请成员</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 mt-4">
-                      <Input
-                        value={searchUsers}
-                        onChange={e => setSearchUsers(e.target.value)}
-                        onKeyUp={() => searchAvailableUsers(searchUsers)}
-                        placeholder="搜索用户..."
-                      />
-                      <div className="max-h-40 overflow-y-auto space-y-2">
-                        {availableUsers.map(user => (
-                          <div key={user.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50">
-                            <input
-                              type="checkbox"
-                              checked={selectedUsers.includes(user.id)}
-                              onChange={() => {
-                                if (selectedUsers.includes(user.id)) {
-                                  setSelectedUsers(selectedUsers.filter(id => id !== user.id));
-                                } else {
-                                  setSelectedUsers([...selectedUsers, user.id]);
-                                }
-                              }}
-                              className="w-4 h-4 rounded"
-                            />
-                            <div className="w-8 h-8 rounded-full bg-cyan-500/15 text-cyan-400 flex items-center justify-center">
-                              {(user.nickname || user.username || "?").charAt(0)}
-                            </div>
-                            <span className="text-sm">{user.nickname || user.username}</span>
+              {groupDetailTab === "members" && (
+                <>
+                  <div className="mb-4 flex gap-2">
+                    <Dialog open={showAnnouncementDialog} onOpenChange={setShowAnnouncementDialog}>
+                      <DialogTrigger asChild>
+                        <Button variant="default" size="sm"><Bell className="w-4 h-4 mr-2" />发布公告</Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>发布群公告</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 mt-4">
+                          <Textarea
+                            value={announcementContent}
+                            onChange={e => setAnnouncementContent(e.target.value)}
+                            placeholder="输入公告内容..."
+                            rows={4}
+                          />
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setShowAnnouncementDialog(false)}>取消</Button>
+                            <Button onClick={handleCreateAnnouncement} disabled={!announcementContent.trim()}>发布</Button>
                           </div>
-                        ))}
-                      </div>
-                      <Textarea
-                        value={inviteMessage}
-                        onChange={e => setInviteMessage(e.target.value)}
-                        placeholder="邀请消息（可选）"
-                        rows={2}
-                      />
-                      <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setShowInviteDialog(false)}>取消</Button>
-                        <Button onClick={handleInviteUsers} disabled={selectedUsers.length === 0}>邀请 ({selectedUsers.length})</Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              <div className="space-y-3">
-                {groupMembers.map(member => (
-                  <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-cyan-500/15 text-cyan-400 text-sm font-semibold flex items-center justify-center">
-                        {(member.nickname || member.username || "?").charAt(0)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{member.nickname || member.username}</p>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] px-2 py-0.5 rounded ${getRoleColor(member.role)}`}>
-                            {getRoleLabel(member.role)}
-                          </span>
-                          {isMuted(member) && (
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 flex items-center gap-1">
-                              <Shield className="w-3 h-3" /> 禁言中
-                            </span>
-                          )}
                         </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {member.role !== "owner" && myGroupRole !== "member" && (
-                        <>
-                          {isMuted(member) ? (
-                            <Button variant="outline" size="xs" onClick={() => handleUnmuteMember(selectedGroup!.id, member.user_id)}>解除禁言</Button>
-                          ) : (
-                            <Button variant="outline" size="xs" onClick={() => handleMuteMember(selectedGroup!.id, member.user_id)}>禁言</Button>
-                          )}
-                          {myGroupRole === "owner" && (
-                            <Button variant="outline" size="xs" onClick={() => handleSetAdmin(selectedGroup!.id, member.user_id, member.role !== "admin")}>
-                              {member.role === "admin" ? "取消管理员" : "设为管理员"}
-                            </Button>
-                          )}
-                          <Button variant="outline" size="xs" className="text-red-600" onClick={() => handleRemoveMember(selectedGroup!.id, member.user_id)}>
-                            <UserMinus className="w-3 h-3" /> 踢出
-                          </Button>
-                        </>
-                      )}
-                      {member.role === "owner" && myGroupRole === "owner" && (
-                        <Badge variant="default" className="bg-red-50 text-red-600">我是群主</Badge>
-                      )}
-                    </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm"><Send className="w-4 h-4 mr-2" />邀请成员</Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                          <DialogTitle>邀请成员</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 mt-4">
+                          <Input
+                            value={searchUsers}
+                            onChange={e => {
+                              setSearchUsers(e.target.value);
+                              searchAvailableUsers(e.target.value);
+                            }}
+                            placeholder="搜索用户..."
+                          />
+                          <div className="max-h-40 overflow-y-auto space-y-2">
+                            {availableUsers.map(user => (
+                              <div key={user.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/50">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedUsers.includes(user.id)}
+                                  onChange={() => {
+                                    if (selectedUsers.includes(user.id)) {
+                                      setSelectedUsers(selectedUsers.filter(id => id !== user.id));
+                                    } else {
+                                      setSelectedUsers([...selectedUsers, user.id]);
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded"
+                                />
+                                <div className="w-8 h-8 rounded-full bg-cyan-500/15 text-cyan-400 flex items-center justify-center">
+                                  {(user.nickname || user.username || "?").charAt(0)}
+                                </div>
+                                <span className="text-sm">{user.nickname || user.username}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <Textarea
+                            value={inviteMessage}
+                            onChange={e => setInviteMessage(e.target.value)}
+                            placeholder="邀请消息（可选）"
+                            rows={2}
+                          />
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setShowInviteDialog(false)}>取消</Button>
+                            <Button onClick={handleInviteUsers} disabled={selectedUsers.length === 0}>邀请 ({selectedUsers.length})</Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
-                ))}
-              </div>
 
-              {joinApplications.filter(a => a.status === "pending").length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium text-foreground mb-3">待处理入群申请</h3>
                   <div className="space-y-3">
-                    {joinApplications.filter(a => a.status === "pending").map(app => (
-                      <div key={app.id} className="p-3 rounded-lg bg-muted/30">
-                        <div className="flex items-start gap-3">
+                    {groupMembers.map(member => (
+                      <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-cyan-500/15 text-cyan-400 text-sm font-semibold flex items-center justify-center">
-                            {(app.nickname || app.username || "?").charAt(0)}
+                            {(member.nickname || member.username || "?").charAt(0)}
                           </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-foreground">{app.nickname || app.username}</p>
-                            {app.message && <p className="text-xs text-muted-foreground mt-1">{app.message}</p>}
-                            <p className="text-[10px] text-muted-foreground mt-1">{formatTime(app.created_at)}</p>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{member.nickname || member.username}</p>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] px-2 py-0.5 rounded ${getRoleColor(member.role)}`}>
+                                {getRoleLabel(member.role)}
+                              </span>
+                              {isMuted(member) && (
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 flex items-center gap-1">
+                                  <Shield className="w-3 h-3" /> 禁言中
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex gap-2 mt-2">
-                          <Button variant="default" size="xs" onClick={() => handleAcceptJoinApplication(selectedGroup!.id, app.id)}><Check className="w-3 h-3" /> 接受</Button>
-                          <Button variant="outline" size="xs" onClick={() => handleRejectJoinApplication(selectedGroup!.id, app.id)}><X className="w-3 h-3" /> 拒绝</Button>
+                        <div className="flex gap-2">
+                          {member.role !== "owner" && myGroupRole !== "member" && (
+                            <>
+                              {isMuted(member) ? (
+                                <Button variant="outline" size="sm" onClick={() => handleUnmuteMember(selectedGroup!.id, member.user_id)}>解除禁言</Button>
+                              ) : (
+                                <Button variant="outline" size="sm" onClick={() => handleMuteMember(selectedGroup!.id, member.user_id)}>禁言</Button>
+                              )}
+                              {myGroupRole === "owner" && (
+                                <Button variant="outline" size="sm" onClick={() => handleSetAdmin(selectedGroup!.id, member.user_id, member.role !== "admin")}>
+                                  {member.role === "admin" ? "取消管理员" : "设为管理员"}
+                                </Button>
+                              )}
+                              <Button variant="outline" size="sm" className="text-red-600" onClick={() => handleRemoveMember(selectedGroup!.id, member.user_id)}>
+                                <UserMinus className="w-3 h-3" /> 踢出
+                              </Button>
+                            </>
+                          )}
+                          {member.role === "owner" && myGroupRole === "owner" && (
+                            <Badge variant="default" className="bg-red-50 text-red-600">我是群主</Badge>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
+                </>
+              )}
+
+              {groupDetailTab === "applications" && (
+                <div>
+                  {joinApplications.filter(a => a.status === "pending").length > 0 ? (
+                    <div className="space-y-3">
+                      {joinApplications.filter(a => a.status === "pending").map(app => (
+                        <div key={app.id} className="p-3 rounded-lg bg-muted/30">
+                          <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-full bg-cyan-500/15 text-cyan-400 text-sm font-semibold flex items-center justify-center">
+                              {(app.nickname || app.username || "?").charAt(0)}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-foreground">{app.nickname || app.username}</p>
+                              {app.message && <p className="text-xs text-muted-foreground mt-1">{app.message}</p>}
+                              <p className="text-[10px] text-muted-foreground mt-1">{formatTime(app.created_at)}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 mt-2">
+                            <Button variant="default" size="sm" onClick={() => handleAcceptJoinApplication(selectedGroup!.id, app.id)}><Check className="w-3 h-3" /> 接受</Button>
+                            <Button variant="outline" size="sm" onClick={() => handleRejectJoinApplication(selectedGroup!.id, app.id)}><X className="w-3 h-3" /> 拒绝</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>暂无入群申请</p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {groupAnnouncements.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium text-foreground mb-3">群公告</h3>
-                  <div className="space-y-3">
-                    {groupAnnouncements.filter(a => a.status === "active").map(announcement => (
-                      <div key={announcement.id} className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
-                        <p className="text-sm text-foreground">{announcement.content}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">{formatTime(announcement.created_at)}</p>
-                      </div>
-                    ))}
+              {groupDetailTab === "announcements" && (
+                <div>
+                  <div className="mb-4">
+                    <Dialog open={showAnnouncementDialog} onOpenChange={setShowAnnouncementDialog}>
+                      <DialogTrigger asChild>
+                        <Button variant="default" size="sm"><Bell className="w-4 h-4 mr-2" />发布公告</Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>发布群公告</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 mt-4">
+                          <Textarea
+                            value={announcementContent}
+                            onChange={e => setAnnouncementContent(e.target.value)}
+                            placeholder="输入公告内容..."
+                            rows={4}
+                          />
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setShowAnnouncementDialog(false)}>取消</Button>
+                            <Button onClick={handleCreateAnnouncement} disabled={!announcementContent.trim()}>发布</Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
+
+                  {groupAnnouncements.filter(a => a.status === "active").length > 0 ? (
+                    <div className="space-y-3">
+                      {groupAnnouncements.filter(a => a.status === "active").map(announcement => (
+                        <div key={announcement.id} className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                          <p className="text-sm text-foreground">{announcement.content}</p>
+                          <div className="flex items-center justify-between mt-1">
+                            <p className="text-[10px] text-muted-foreground">{formatTime(announcement.created_at)}</p>
+                            {myGroupRole !== "member" && (
+                              <Button variant="outline" size="sm" className="text-red-600" onClick={() => handleDeleteAnnouncement(selectedGroup!.id, announcement.id)}>
+                                <Trash2 className="w-3 h-3" /> 删除
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Bell className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>暂无群公告</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

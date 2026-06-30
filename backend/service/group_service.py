@@ -23,6 +23,7 @@ from model.group import FriendApplication
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from model.user import User
+from service.notification_service import send_notification_service
 from model.group import Group, GroupJoinApplication, GroupInvitation
 from core.ws_manager import ws_manager
 
@@ -64,11 +65,13 @@ def get_groups(db: Session, current_user: User) -> List[Dict]:
         result.append({
             "id": group.id,
             "name": group.name,
-            "avatar_file_id": group.avatar_file_id,
+            "description": group.description,
+            "max_members": group.max_members,
             "member_count": member_count,
-            "owner_id": group.owner_id,
-            "role": role,
-            "status": group.status
+            "status": group.status,
+            "created_by": group.owner_id,
+            "created_at": group.created_at.isoformat() if group.created_at else None,
+            "updated_at": group.updated_at.isoformat() if group.updated_at else None
         })
     
     return result
@@ -90,12 +93,15 @@ def get_group_detail(db: Session, current_user: User, group_id: int) -> Dict:
     for member in members:
         user = get_user_by_id(db, member.user_id)
         member_info.append({
+            "id": member.id,
+            "group_id": member.group_id,
             "user_id": user.id,
             "username": user.username,
             "nickname": user.nickname,
             "avatar_file_id": user.avatar_file_id,
             "role": member.role,
-            "joined_at": member.joined_at
+            "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            "muted_until": member.muted_until.isoformat() if member.muted_until else None
         })
     
     # 获取当前用户角色
@@ -103,19 +109,17 @@ def get_group_detail(db: Session, current_user: User, group_id: int) -> Dict:
     role = current_member.role if current_member else None
     
     return {
-        "group": {
-            "id": group.id,
-            "name": group.name,
-            "avatar_file_id": group.avatar_file_id,
-            "description": group.description,
-            "owner_id": group.owner_id,
-            "max_members": group.max_members,
-            "join_mode": group.join_mode,
-            "allow_member_invite": group.allow_member_invite
-        },
-        "members": member_info,
+        "id": group.id,
+        "name": group.name,
+        "avatar_file_id": group.avatar_file_id,
+        "description": group.description,
+        "max_members": group.max_members,
         "member_count": len(members),
-        "my_role": role
+        "status": group.status,
+        "created_by": group.owner_id,
+        "members": member_info,
+        "created_at": group.created_at.isoformat() if group.created_at else None,
+        "updated_at": group.updated_at.isoformat() if group.updated_at else None
     }
 
 
@@ -383,12 +387,13 @@ def get_group_announcements_service(db: Session, current_user: User, group_id: i
         result.append({
             "id": announcement.id,
             "content": announcement.content,
+            "status": announcement.status,
             "creator": {
                 "id": creator.id,
                 "username": creator.username,
                 "nickname": creator.nickname
             },
-            "created_at": announcement.created_at
+            "created_at": announcement.created_at.isoformat() if announcement.created_at else None
         })
     return result
 
@@ -553,9 +558,6 @@ def invite_to_group_service(db: Session, current_user: User, group_id: int, invi
     if not invitee:
         raise NotFoundException("被邀请用户不存在")
     
-    if invitee.tenant_id != group.tenant_id:
-        raise ForbiddenException("无法邀请非同租户用户")
-    
     if is_group_member(db, group_id, invitee_id):
         raise BadRequestException("已是群成员")
     
@@ -569,6 +571,7 @@ def invite_to_group_service(db: Session, current_user: User, group_id: int, invi
     
     invitation = create_group_invitation(db, group_id, current_user.id, invitee_id, message)
     logger.info(f"邀请进群: inviter_id={current_user.id}, invitee_id={invitee_id}, group_id={group_id}")
+    
     return {
         "id": invitation.id,
         "expires_at": invitation.expires_at

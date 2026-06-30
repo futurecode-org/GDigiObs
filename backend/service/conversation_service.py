@@ -136,6 +136,15 @@ def get_conversation_detail(db: Session, current_user: User, conversation_id: in
     # 获取成员信息
     members = get_conversation_members(db, conversation_id)
     member_info = []
+    
+    # 如果是群聊，获取群成员角色信息
+    group_member_roles = {}
+    if conversation.type == "group" and conversation.group_id:
+        from dao.group_dao import get_group_members
+        group_members = get_group_members(db, conversation.group_id)
+        for gm in group_members:
+            group_member_roles[gm.user_id] = gm.role
+    
     for member in members:
         user = get_user_by_id(db, member.user_id)
         member_info.append({
@@ -143,7 +152,7 @@ def get_conversation_detail(db: Session, current_user: User, conversation_id: in
             "username": user.username,
             "nickname": user.nickname,
             "avatar_file_id": user.avatar_file_id,
-            "role": member.role if conversation.type == "group" else None
+            "role": group_member_roles.get(member.user_id) if conversation.type == "group" else None
         })
     
     # 获取当前用户未读数

@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeader } from "@/shared/components/SectionHeader";
-import { notificationApi, friendApi } from "../../../lib/api";
+import { notificationApi, friendApi, groupApi } from "../../../lib/api";
 import { toast } from "sonner";
 import type { Notification } from "../../../lib/types";
 import { cn } from "@/lib/utils";
@@ -78,8 +78,37 @@ export function NotificationsPage() {
     }
   };
 
-  const typeLabels: Record<string, string> = { system: "系统", task: "任务", message: "消息", approval: "审批", friend_application: "好友申请" };
-  const typeColors: Record<string, string> = { system: "secondary", task: "default", message: "outline", approval: "outline", friend_application: "destructive" };
+  const handleAcceptGroupInvitation = async (notif: Notification) => {
+    const invitationId = (notif.data as any)?.invitation_id;
+    if (!invitationId) return;
+    
+    try {
+      await groupApi.acceptInvitation(invitationId);
+      setNotifications(notifications.filter(n => n.id !== notif.id));
+      toast.success("已加入群组");
+      // 刷新页面以显示新加入的群组
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err: any) {
+      const message = err?.message || "加入群组失败";
+      toast.error(message);
+    }
+  };
+
+  const handleRejectGroupInvitation = async (notif: Notification) => {
+    const invitationId = (notif.data as any)?.invitation_id;
+    if (!invitationId) return;
+    
+    try {
+      await groupApi.rejectInvitation(invitationId);
+      setNotifications(notifications.filter(n => n.id !== notif.id));
+    } catch (err: any) {
+      const message = err?.message || "拒绝邀请失败";
+      toast.error(message);
+    }
+  };
+
+  const typeLabels: Record<string, string> = { system: "系统", task: "任务", message: "消息", approval: "审批", friend_application: "好友申请", group_invitation: "群邀请" };
+  const typeColors: Record<string, string> = { system: "secondary", task: "default", message: "outline", approval: "outline", friend_application: "destructive", group_invitation: "default" };
 
   // 获取通知类型（兼容两种字段名）
   const getNotifType = (notif: Notification) => notif.notification_type || notif.type || "system";
@@ -195,7 +224,8 @@ export function NotificationsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium text-foreground">
-                          {notifType === "friend_application" ? `${fromNickname} 请求添加您为好友` : notif.title}
+                          {notifType === "friend_application" ? `${fromNickname} 请求添加您为好友` :
+                           notifType === "group_invitation" ? `${(notif.data as any)?.inviter_username} 邀请您加入群组` : notif.title}
                         </span>
                         <Badge variant={typeColors[notifType] as "default" | "secondary" | "outline" | "destructive" | "ghost"} className="text-[10px]">
                           {typeLabels[notifType]}
@@ -210,6 +240,8 @@ export function NotificationsPage() {
                             <p className="text-xs text-muted-foreground/80 mb-2 italic">"{(notif.data as any).message}"</p>
                           )}
                         </>
+                      ) : notifType === "group_invitation" ? (
+                        <p className="text-xs text-muted-foreground mb-2">群组：{(notif.data as any)?.group_name || ""}</p>
                       ) : (
                         <p className="text-xs text-muted-foreground mb-2">{notif.content}</p>
                       )}
@@ -232,7 +264,23 @@ export function NotificationsPage() {
                               </button>
                             </>
                           )}
-                          {unread && notifType !== "friend_application" && (
+                          {notifType === "group_invitation" && (
+                            <>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleAcceptGroupInvitation(notif); }} 
+                                className="text-[10px] text-green-500 hover:underline flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" /> 接受
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleRejectGroupInvitation(notif); }} 
+                                className="text-[10px] text-red-400 hover:underline flex items-center gap-1"
+                              >
+                                <X className="w-3 h-3" /> 拒绝
+                              </button>
+                            </>
+                          )}
+                          {unread && notifType !== "friend_application" && notifType !== "group_invitation" && (
                             <button onClick={(e) => { e.stopPropagation(); markAsRead(notif.id); }} className="text-[10px] text-primary hover:underline flex items-center gap-1">
                               <Check className="w-3 h-3" /> 标记已读
                             </button>

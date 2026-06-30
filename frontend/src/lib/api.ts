@@ -360,11 +360,11 @@ export const groupApi = {
   createAnnouncement: (groupId: number, content: string): Promise<GroupAnnouncement> =>
     post(`/groups/${groupId}/announcements`, { content }),
 
-  updateAnnouncement: (groupId: number, announcementId: number, content: string, status?: string): Promise<GroupAnnouncement> =>
-    put(`/groups/${groupId}/announcements/${announcementId}`, { content, status }),
+  updateAnnouncement: (announcementId: number, content: string, status?: string): Promise<GroupAnnouncement> =>
+    put(`/groups/announcements/${announcementId}`, { content, status }),
 
-  deactivateAnnouncement: (groupId: number, announcementId: number): Promise<void> =>
-    post(`/groups/${groupId}/announcements/${announcementId}/deactivate`),
+  deactivateAnnouncement: (announcementId: number): Promise<void> =>
+    del(`/groups/announcements/${announcementId}`),
 
   getJoinApplications: (groupId?: number): Promise<GroupJoinApplication[]> =>
     get("/groups/join-applications", groupId ? { group_id: groupId } : undefined),

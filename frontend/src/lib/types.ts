@@ -51,8 +51,8 @@ export interface MenuItem {
 export interface Notification {
   id: number;
   user_id: number;
-  notification_type: "system" | "task" | "message" | "approval" | "friend_application";
-  type?: "system" | "task" | "message" | "approval" | "friend_application";
+  notification_type: "system" | "task" | "message" | "approval" | "friend_application" | "group_invitation";
+  type?: "system" | "task" | "message" | "approval" | "friend_application" | "group_invitation";
   title: string;
   content: string;
   data?: any;

@@ -53,6 +53,68 @@ def get_or_create_direct_conversation(db: Session, user_id1: int, user_id2: int,
     return conversation
 
 
+def get_or_create_group_conversation(db: Session, group_id: int, tenant_id: int, owner_id: int) -> Conversation:
+    """获取或创建群组会话"""
+    # 查找现有群组会话
+    existing = db.query(Conversation).filter(
+        Conversation.tenant_id == tenant_id,
+        Conversation.type == "group",
+        Conversation.group_id == group_id
+    ).first()
+    
+    if existing:
+        return existing
+    
+    # 创建新会话
+    conversation = Conversation(
+        tenant_id=tenant_id,
+        type="group",
+        group_id=group_id
+    )
+    db.add(conversation)
+    db.flush()
+    
+    # 添加群主为会话成员
+    member = ConversationMember(
+        conversation_id=conversation.id,
+        user_id=owner_id
+    )
+    db.add(member)
+    db.commit()
+    
+    return conversation
+
+
+def add_user_to_group_conversation(db: Session, group_id: int, user_id: int):
+    """将用户添加到群组会话"""
+    conversation = db.query(Conversation).filter(
+        Conversation.type == "group",
+        Conversation.group_id == group_id
+    ).first()
+    
+    if not conversation:
+        return False
+    
+    # 检查是否已经是会话成员
+    existing = db.query(ConversationMember).filter(
+        ConversationMember.conversation_id == conversation.id,
+        ConversationMember.user_id == user_id
+    ).first()
+    
+    if existing:
+        return False
+    
+    # 添加到会话成员
+    member = ConversationMember(
+        conversation_id=conversation.id,
+        user_id=user_id
+    )
+    db.add(member)
+    db.commit()
+    
+    return True
+
+
 def get_user_conversations(db: Session, user_id: int) -> List[Conversation]:
     """获取用户的所有会话"""
     conversations = db.query(Conversation).join(ConversationMember).filter(

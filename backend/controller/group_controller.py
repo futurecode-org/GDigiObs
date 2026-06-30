@@ -31,6 +31,7 @@ from service.group_service import (
 )
 from service.notification_service import send_notification_service
 from dao.user_dao import get_user_by_id
+from dao.conversation_dao import get_or_create_group_conversation, add_user_to_group_conversation
 
 from model.user import User
 from core.ws_manager import ws_manager
@@ -55,6 +56,10 @@ def create_group(
     result = create_group_service(
         db, current_user, data.name, data.description, data.max_members
     )
+    
+    # 创建群组会话
+    get_or_create_group_conversation(db, result["id"], current_user.tenant_id, current_user.id)
+    
     return ApiResponse.success(data=result)
 
 
@@ -369,17 +374,52 @@ def invite_user(
     group_id: int,
     data: GroupInvitationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = None
 ):
     """
     邀请用户进群
     
     - 群成员可邀请（取决于群组设置）
-    - 被邀请人必须同租户
     """
     results = []
     for invitee_id in data.invitee_ids:
         result = invite_to_group_service(db, current_user, group_id, invitee_id, data.message)
+        
+        invitee = get_user_by_id(db, invitee_id)
+        group = get_group_by_id(db, group_id)
+        
+        send_notification_service(
+            db,
+            invitee.tenant_id or 0,
+            invitee_id,
+            "group_invitation",
+            "群邀请",
+            f"{current_user.username} 邀请您加入群组「{group.name}」",
+            {
+                "invitation_id": result["id"],
+                "group_id": group_id,
+                "group_name": group.name,
+                "inviter_id": current_user.id,
+                "inviter_username": current_user.username
+            }
+        )
+        
+        if background_tasks:
+            background_tasks.add_task(
+                ws_manager.send_personal_message,
+                invitee_id,
+                "group.invitation.new",
+                {
+                    "invitation_id": result["id"],
+                    "group_id": group_id,
+                    "group_name": group.name,
+                    "inviter_id": current_user.id,
+                    "inviter_username": current_user.username,
+                    "message": data.message
+                }
+            )
+        
         results.append(result)
     return ApiResponse.success(data=results)
 
