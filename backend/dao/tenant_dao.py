@@ -1,3 +1,4 @@
+"""租户管理数据访问层"""
 import logging
 from typing import Optional, List
 from sqlalchemy.orm import Session
