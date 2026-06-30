@@ -443,7 +443,11 @@ def accept_group_invitation(db: Session, invitation_id: int, user_id: int) -> bo
     invitation.status = "accepted"
     invitation.accepted_at = now
     
-    add_group_member(db, invitation.group_id, user_id)
+    # 添加用户到群组
+    member = add_group_member(db, invitation.group_id, user_id)
+    if not member:
+        db.rollback()
+        return False
     
     # 将用户添加到群组会话
     from dao.conversation_dao import add_user_to_group_conversation

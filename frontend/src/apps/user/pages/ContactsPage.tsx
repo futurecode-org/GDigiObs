@@ -352,7 +352,11 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
       await groupApi.acceptInvitation(invitationId);
       fetchGroupInvitations();
       fetchGroups();
-    } catch {}
+      toast.success("已加入群组");
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || err?.message || "加入群组失败";
+      toast.error(message);
+    }
   };
 
   const handleRejectInvitation = async (invitationId: number) => {
@@ -883,28 +887,30 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
               {groupDetailTab === "members" && (
                 <>
                   <div className="mb-4 flex gap-2">
-                    <Dialog open={showAnnouncementDialog} onOpenChange={setShowAnnouncementDialog}>
-                      <DialogTrigger asChild>
-                        <Button variant="default" size="sm"><Bell className="w-4 h-4 mr-2" />发布公告</Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>发布群公告</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 mt-4">
-                          <Textarea
-                            value={announcementContent}
-                            onChange={e => setAnnouncementContent(e.target.value)}
-                            placeholder="输入公告内容..."
-                            rows={4}
-                          />
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setShowAnnouncementDialog(false)}>取消</Button>
-                            <Button onClick={handleCreateAnnouncement} disabled={!announcementContent.trim()}>发布</Button>
+                    {(myGroupRole === "owner" || myGroupRole === "admin") && (
+                      <Dialog open={showAnnouncementDialog} onOpenChange={setShowAnnouncementDialog}>
+                        <DialogTrigger asChild>
+                          <Button variant="default" size="sm"><Bell className="w-4 h-4 mr-2" />发布公告</Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>发布群公告</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 mt-4">
+                            <Textarea
+                              value={announcementContent}
+                              onChange={e => setAnnouncementContent(e.target.value)}
+                              placeholder="输入公告内容..."
+                              rows={4}
+                            />
+                            <div className="flex gap-2">
+                              <Button variant="outline" onClick={() => setShowAnnouncementDialog(false)}>取消</Button>
+                              <Button onClick={handleCreateAnnouncement} disabled={!announcementContent.trim()}>发布</Button>
+                            </div>
                           </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                        </DialogContent>
+                      </Dialog>
+                    )}
 
                     <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
                       <DialogTrigger asChild>
@@ -1044,28 +1050,30 @@ export function ContactsPage({ onNavigate }: ContactsPageProps) {
               {groupDetailTab === "announcements" && (
                 <div>
                   <div className="mb-4">
-                    <Dialog open={showAnnouncementDialog} onOpenChange={setShowAnnouncementDialog}>
-                      <DialogTrigger asChild>
-                        <Button variant="default" size="sm"><Bell className="w-4 h-4 mr-2" />发布公告</Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>发布群公告</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 mt-4">
-                          <Textarea
-                            value={announcementContent}
-                            onChange={e => setAnnouncementContent(e.target.value)}
-                            placeholder="输入公告内容..."
-                            rows={4}
-                          />
-                          <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => setShowAnnouncementDialog(false)}>取消</Button>
-                            <Button onClick={handleCreateAnnouncement} disabled={!announcementContent.trim()}>发布</Button>
+                    {(myGroupRole === "owner" || myGroupRole === "admin") && (
+                      <Dialog open={showAnnouncementDialog} onOpenChange={setShowAnnouncementDialog}>
+                        <DialogTrigger asChild>
+                          <Button variant="default" size="sm"><Bell className="w-4 h-4 mr-2" />发布公告</Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>发布群公告</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 mt-4">
+                            <Textarea
+                              value={announcementContent}
+                              onChange={e => setAnnouncementContent(e.target.value)}
+                              placeholder="输入公告内容..."
+                              rows={4}
+                            />
+                            <div className="flex gap-2">
+                              <Button variant="outline" onClick={() => setShowAnnouncementDialog(false)}>取消</Button>
+                              <Button onClick={handleCreateAnnouncement} disabled={!announcementContent.trim()}>发布</Button>
+                            </div>
                           </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                        </DialogContent>
+                      </Dialog>
+                    )}
                   </div>
 
                   {groupAnnouncements.filter(a => a.status === "active").length > 0 ? (

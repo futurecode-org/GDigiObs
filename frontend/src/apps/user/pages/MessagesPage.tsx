@@ -521,17 +521,31 @@ export function MessagesPage() {
               </div>
               <div className="flex items-center gap-2">
                 {selectedConversation.type === "group" && (
-                  <Dialog open={showAnnouncement} onOpenChange={setShowAnnouncement}>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 px-2">
-                        公告
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>群公告</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
+                  <>
+                    {/* 公告查看（所有人可见） */}
+                    <Dialog open={showAnnouncement} onOpenChange={setShowAnnouncement}>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 px-2">
+                          公告
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>群公告</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="text-sm text-muted-foreground">
+                            {groupAnnouncement || "暂无公告"}
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                    
+                    {/* 公告编辑（仅群主和管理员） */}
+                    {selectedConversation.members?.some(
+                      m => m.user_id === user?.id && ["owner", "admin"].includes(m.role || "")
+                    ) && (
+                      <div className="space-y-4 mt-4">
                         <textarea
                           value={groupAnnouncement}
                           onChange={e => setGroupAnnouncement(e.target.value)}
@@ -541,8 +555,8 @@ export function MessagesPage() {
                         />
                         <Button className="w-full">发布公告</Button>
                       </div>
-                    </DialogContent>
-                  </Dialog>
+                    )}
+                  </>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
