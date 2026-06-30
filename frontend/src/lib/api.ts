@@ -722,8 +722,26 @@ export const modelApi = {
   delete: (modelId: number): Promise<void> =>
     del(`/models/${modelId}`),
 
+  toggleStatus: (modelId: number, status: string): Promise<ModelConfig> =>
+    post(`/models/${modelId}/toggle`, { status }),
+
   test: (modelId: number): Promise<{ success: boolean; message?: string }> =>
     post(`/models/${modelId}/test`),
+
+  testConnectivity: (data: {
+    base_url: string;
+    api_key?: string;
+    model_key: string;
+    api_type?: string;
+    max_tokens?: number;
+  }): Promise<{ success: boolean; message: string; status_code?: number; response?: unknown }> =>
+    post("/models/test-connectivity", data),
+
+  getLogs: (modelId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
+    get(`/models/${modelId}/logs`, params),
+
+  getTokenUsage: (modelId: number): Promise<unknown> =>
+    get(`/models/${modelId}/token-usage`),
 };
 
 export const notificationSettingApi = {
