@@ -31,7 +31,7 @@ interface UserFormData {
   user_type: string
   status: string
   role_id: number
-  password: string
+  password?: string
 }
 
 const emptyForm: UserFormData = {
@@ -587,7 +587,7 @@ export function UserManagement() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               <X className="w-4 h-4 mr-1" /> 取消
             </Button>
-            <Button onClick={handleSubmit} disabled={submitting || !formData.username.trim() || (!editingUser && !formData.password.trim())}>
+            <Button onClick={handleSubmit} disabled={submitting || !formData.username.trim() || (!editingUser && !(formData.password || "").trim())}>
               {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
               {editingUser ? "保存" : "创建"}
             </Button>

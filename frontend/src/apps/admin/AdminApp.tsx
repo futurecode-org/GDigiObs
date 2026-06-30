@@ -3,7 +3,9 @@ import type { AdminPage } from "@/lib/types"
 import { TopBar } from "@/shared/components/TopBar"
 import { AdminSidebar } from "@/shared/components/AdminSidebar"
 import { AdminDashboard } from "./pages/AdminDashboard"
-import { TenantManagement, OrgStructure, UserManagement, RoleManagement, Permissions, GroupManagement, DataCollection, DataClean, DataAnalysis, DataAudit, ModelManagement, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, ChatAudit, SensitiveWords, OpLogs, AuditLogs, NotifySettings, PlatformConfig, AdminNotifications } from "./pages/PlaceholderPages"
+import { TenantManagement, UserManagement, RoleManagement, GroupManagement, DataCollection, DataClean, DataAnalysis, ModelManagement, OpLogs, NotifySettings, PlatformConfig, AdminNotifications } from "./pages/PlaceholderPages"
+import { OrgStructure, Permissions, DataAudit, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, ChatAudit, AuditLogs } from "./pages/ConnectedAdminPages"
+import { SensitiveWords } from "./pages/SensitiveWords"
 
 const pageTitles: Record<AdminPage, string> = {
   dashboard: "工作台",

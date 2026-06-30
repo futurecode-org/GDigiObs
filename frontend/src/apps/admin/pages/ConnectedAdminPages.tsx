@@ -1,20 +1,15 @@
 import { useCallback, useEffect, useState } from "react"
 import type { ReactNode } from "react"
-import { Bell, Bot, BrainCircuit, ClipboardCheck, Cog, Database, FileQuestion, KeyRound, Loader2, MessageSquareWarning, Network, Search, ShieldAlert, Sparkles, Workflow, Building2, Users, UserCog, Shield, LayoutGrid, ChevronLeft, ChevronRight, MoreVertical, Eye, Edit, Ban, UserCheck, Trash2, Plus, X, Check } from "lucide-react"
+import { Bot, ClipboardCheck, Database, FileQuestion, KeyRound, Loader2, MessageSquareWarning, Network, Search, ShieldAlert, Sparkles, Workflow } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SectionHeader } from "@/shared/components/SectionHeader"
-import { agentApi, askApi, auditApi, difyApi, groupApi, knowledgeApi, notificationApi, rbacApi, skillApi, tenantApi, userApi, workflowApi } from "@/lib/api"
-import type { Agent, AskRecord, AuditLog, DifyApp, DifyProvider, Group, KnowledgeBase, Notification, PaginatedData, Permission, Role, Skill, Tenant, User, Workflow as WorkflowType } from "@/lib/types"
+import { agentApi, askApi, auditApi, knowledgeApi, rbacApi, skillApi, userApi, workflowApi } from "@/lib/api"
+import type { Agent, AskRecord, AuditLog, KnowledgeBase, PaginatedData, Permission, Skill, User, Workflow as WorkflowType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 type Column<T> = {
@@ -201,7 +196,7 @@ export function OrgStructure() {
     setDetailOpen(true)
   }
 
-  const statusLabels: Record<string, string> = { active: "正常", inactive: "禁用", pending: "待激活", banned: "已封禁" }
+  // const statusLabels: Record<string, string> = { active: "正常", inactive: "禁用", pending: "待激活", banned: "已封禁" }
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-4">
@@ -219,7 +214,7 @@ export function OrgStructure() {
                 className="pl-9"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setTenantFilter("all")}
                 className={cn(
@@ -299,7 +294,7 @@ export function OrgStructure() {
                     <TableCell>{statusBadge(user.status)}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon-sm" onClick={() => handleOpenDetail(user)}>
-                        <Eye className="size-4" />
+                        <span className="text-xs">查看</span>
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -390,12 +385,12 @@ export function Permissions() {
     return matchSearch && matchModule
   })
 
-  const permissionsByModule = filteredPermissions.reduce((acc, perm) => {
-    const module = perm.module || "其他"
-    if (!acc[module]) acc[module] = []
-    acc[module].push(perm)
-    return acc
-  }, {} as Record<string, Permission[]>)
+  // const permissionsByModule = filteredPermissions.reduce((acc, perm) => {
+  //   const module = perm.module || "其他"
+  //   if (!acc[module]) acc[module] = []
+  //   acc[module].push(perm)
+  //   return acc
+  // }, {} as Record<string, Permission[]>)
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-4">
@@ -514,325 +509,6 @@ export function Permissions() {
           })}
         </div>
       )}
-    </div>
-  )
-}
-
-/* ==================== 群组管理 ==================== */
-
-export function GroupManagement() {
-  const [groups, setGroups] = useState<Group[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingGroup, setEditingGroup] = useState<Group | null>(null)
-  const [formData, setFormData] = useState({ name: "", description: "", max_members: 200 })
-  const [submitting, setSubmitting] = useState(false)
-
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [detailGroup, setDetailGroup] = useState<Group | null>(null)
-
-  const fetchGroups = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const result = await groupApi.getList() as Group[]
-      setGroups(result)
-      setTotalPages(1)
-    } catch (error) {
-      console.error("获取群组列表失败:", error)
-      setGroups([])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchGroups()
-  }, [fetchGroups])
-
-  const handleOpenCreate = () => {
-    setEditingGroup(null)
-    setFormData({ name: "", description: "", max_members: 200 })
-    setDialogOpen(true)
-  }
-
-  const handleOpenEdit = (group: Group) => {
-    setEditingGroup(group)
-    setFormData({ name: group.name, description: group.description || "", max_members: group.max_members || 200 })
-    setDialogOpen(true)
-  }
-
-  const handleOpenDetail = (group: Group) => {
-    setDetailGroup(group)
-    setDetailOpen(true)
-  }
-
-  const handleSubmit = async () => {
-    if (!formData.name.trim()) return
-    setSubmitting(true)
-    try {
-      if (editingGroup) {
-        await groupApi.update(editingGroup.id, { name: formData.name, description: formData.description })
-      } else {
-        await groupApi.create(formData.name, formData.description, formData.max_members)
-      }
-      setDialogOpen(false)
-      fetchGroups()
-    } catch (error) {
-      console.error("保存群组失败:", error)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleDissolve = async (groupId: number, groupName: string) => {
-    if (!confirm(`确定要解散群组「${groupName}」吗？解散后所有成员将被移除。`)) return
-    try {
-      await groupApi.dissolve(groupId)
-      fetchGroups()
-    } catch (error) {
-      console.error("解散群组失败:", error)
-    }
-  }
-
-  const filteredGroups = groups.filter(group =>
-    group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    group.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="p-4 border-b border-border">
-        <SectionHeader
-          title="群组管理"
-          action={
-            <Button size="sm" onClick={handleOpenCreate}>
-              <Plus className="w-4 h-4" /> 创建群组
-            </Button>
-          }
-        />
-        <div className="relative flex-1 max-w-md mt-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="搜索群组名称、描述..."
-            className="w-full pl-9 pr-3 py-2 bg-muted border border-transparent rounded-lg text-sm focus:outline-none focus:border-primary"
-          />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        <Card>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin" />
-              </div>
-            ) : filteredGroups.length === 0 ? (
-              <div className="flex items-center justify-center py-12 text-muted-foreground">
-                <div className="text-center">
-                  <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>暂无群组数据</p>
-                </div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">群组名称</th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">描述</th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">成员数</th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">群主</th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">状态</th>
-                      <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">创建时间</th>
-                      <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredGroups.map(group => (
-                      <tr key={group.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                              <LayoutGrid className="w-4 h-4 text-purple-400" />
-                            </div>
-                            <span className="text-sm font-medium text-foreground">{group.name}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-sm text-muted-foreground truncate max-w-xs block">
-                            {group.description || "-"}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1 text-sm text-foreground">
-                            <Users className="w-4 h-4 text-muted-foreground" />
-                            {group.member_count}/{group.max_members}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-sm text-foreground">
-                            {group.members?.find(m => m.role === "owner")?.nickname || group.members?.find(m => m.role === "owner")?.username || "-"}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge className={`text-xs ${group.status === "active" ? "bg-emerald-500/15 text-emerald-400" : "bg-destructive/15 text-destructive"}`}>
-                            {group.status === "active" ? "正常" : "已解散"}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">
-                          {group.created_at ? new Date(group.created_at).toLocaleDateString() : "-"}
-                        </td>
-                        <td className="py-3 px-4">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleOpenDetail(group)}>
-                                <Eye className="w-4 h-4 mr-2" /> 查看详情
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleOpenEdit(group)}>
-                                <Edit className="w-4 h-4 mr-2" /> 编辑
-                              </DropdownMenuItem>
-                              {group.status === "active" && (
-                                <DropdownMenuItem onClick={() => handleDissolve(group.id, group.name)} className="text-destructive">
-                                  <Trash2 className="w-4 h-4 mr-2" /> 解散群组
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <span className="text-sm text-muted-foreground">共 {totalPages} 页，当前第 {page} 页</span>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingGroup ? "编辑群组" : "创建群组"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>群组名称 <span className="text-destructive">*</span></Label>
-              <Input
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                placeholder="请输入群组名称"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>描述</Label>
-              <Textarea
-                value={formData.description}
-                onChange={e => setFormData({ ...formData, description: e.target.value })}
-                placeholder="请输入群组描述"
-                rows={3}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>最大成员数</Label>
-              <Input
-                type="number"
-                value={formData.max_members}
-                onChange={e => setFormData({ ...formData, max_members: parseInt(e.target.value) || 200 })}
-                placeholder="最大成员数"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              <X className="w-4 h-4 mr-1" /> 取消
-            </Button>
-            <Button onClick={handleSubmit} disabled={submitting || !formData.name.trim()}>
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
-              {editingGroup ? "保存" : "创建"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Detail Dialog */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>群组详情</DialogTitle>
-          </DialogHeader>
-          {detailGroup && (
-            <div className="space-y-4 py-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <LayoutGrid className="w-6 h-6 text-purple-400" />
-                </div>
-                <div>
-                  <p className="text-lg font-medium">{detailGroup.name}</p>
-                  <Badge className={`text-xs mt-1 ${detailGroup.status === "active" ? "bg-emerald-500/15 text-emerald-400" : "bg-destructive/15 text-destructive"}`}>
-                    {detailGroup.status === "active" ? "正常" : "已解散"}
-                  </Badge>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><span className="text-muted-foreground">描述</span><p className="mt-1 font-medium">{detailGroup.description || "-"}</p></div>
-                <div><span className="text-muted-foreground">成员数</span><p className="mt-1 font-medium">{detailGroup.member_count}/{detailGroup.max_members}</p></div>
-                <div><span className="text-muted-foreground">群主</span><p className="mt-1 font-medium">{detailGroup.members?.find(m => m.role === "owner")?.nickname || "-"}</p></div>
-                <div><span className="text-muted-foreground">创建时间</span><p className="mt-1 font-medium">{detailGroup.created_at ? new Date(detailGroup.created_at).toLocaleString() : "-"}</p></div>
-              </div>
-              {detailGroup.members && detailGroup.members.length > 0 && (
-                <div>
-                  <span className="text-muted-foreground text-sm">成员列表</span>
-                  <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
-                    {detailGroup.members.map(member => (
-                      <div key={member.id} className="flex items-center justify-between py-1.5 px-2 bg-muted rounded">
-                        <span className="text-sm">{member.nickname || member.username}</span>
-                        <Badge variant="outline" className="text-[10px]">
-                          {member.role === "owner" ? "群主" : member.role === "admin" ? "管理员" : "成员"}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailOpen(false)}>关闭</Button>
-            {detailGroup && (
-              <Button onClick={() => { setDetailOpen(false); handleOpenEdit(detailGroup); }}>
-                <Edit className="w-4 h-4 mr-1" /> 编辑
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
@@ -964,65 +640,4 @@ export function QueryManagement() {
       ]}
     />
   )
-}
-
-export function AdminNotifications() {
-  return (
-    <DataPage<Notification>
-      title="系统通知"
-      icon={<Bell className="size-5" />}
-      searchPlaceholder="搜索通知标题、内容..."
-      fetcher={page => notificationApi.getList({ page, page_size: 20 })}
-      filter={(notice, query) => [notice.title, notice.content, notice.type].some(value => value?.toLowerCase().includes(query))}
-      columns={[
-        { key: "title", title: "标题", render: notice => <span className="font-medium">{notice.title}</span> },
-        { key: "type", title: "类型", render: notice => <Badge variant="outline" className="text-xs">{notice.type}</Badge> },
-        { key: "content", title: "内容", render: notice => <span className="line-clamp-1 whitespace-normal">{notice.content || "-"}</span> },
-        { key: "read", title: "状态", render: notice => statusBadge(notice.read ? "read" : "unread") },
-        { key: "created", title: "创建时间", render: notice => formatDate(notice.created_at) },
-      ]}
-    />
-  )
-}
-
-export function PlatformConfig() {
-  type ConfigRow = DifyProvider | DifyApp | Tenant
-
-  const fetcher = async () => {
-    const [providers, apps, tenants] = await Promise.all([
-      difyApi.getProviders({ page: 1, page_size: 50 }),
-      difyApi.getApps({ page: 1, page_size: 50 }),
-      tenantApi.getList({ page: 1, page_size: 50 }),
-    ])
-    return [...providers.items, ...apps.items, ...tenants.items] as ConfigRow[]
-  }
-
-  return (
-    <DataPage<ConfigRow>
-      title="平台配置"
-      subtitle="展示租户与 Dify 平台集成配置"
-      icon={<Cog className="size-5" />}
-      searchPlaceholder="搜索配置名称、类型、地址..."
-      fetcher={fetcher}
-      filter={(row, query) => {
-        const values = "base_url" in row ? [row.name, row.base_url, row.status] : [row.name, "tenant_type" in row ? row.tenant_type : row.app_type, row.status]
-        return values.some(value => value?.toLowerCase().includes(query))
-      }}
-      columns={[
-        { key: "name", title: "名称", render: row => <span className="font-medium">{row.name}</span> },
-        { key: "kind", title: "类型", render: row => "base_url" in row ? "Dify Provider" : "api_endpoint" in row ? "Dify App" : "Tenant" },
-        { key: "value", title: "配置", render: row => "base_url" in row ? row.base_url : "api_endpoint" in row ? row.api_endpoint : row.tenant_type },
-        { key: "status", title: "状态", render: row => statusBadge(row.status) },
-        { key: "created", title: "创建时间", render: row => formatDate(row.created_at) },
-      ]}
-    />
-  )
-}
-
-export function NotifySettings() {
-  return <AdminNotifications />
-}
-
-export function SensitiveWords() {
-  return <AuditLogPage title="敏感词库" auditType="message" icon={<BrainCircuit className="size-5" />} />
 }
