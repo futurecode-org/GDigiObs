@@ -54,8 +54,8 @@ export function DataClean() {
   }
 
   const filteredItems = items.filter(item => 
-    item.task_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.source_url.toLowerCase().includes(searchQuery.toLowerCase())
+    (item.title || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (item.source_url || "").toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const statusLabels: Record<string, string> = {
@@ -146,7 +146,7 @@ export function DataClean() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <FileText className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm font-medium text-foreground">{item.task_name}</span>
+                            <span className="text-sm font-medium text-foreground">{item.title || "-"}</span>
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -161,7 +161,7 @@ export function DataClean() {
                         </td>
                         <td className="py-3 px-4">
                           <span className="text-xs text-muted-foreground">
-                            {item.collected_at ? new Date(item.collected_at).toLocaleString() : "-"}
+                            {item.created_at ? new Date(item.created_at).toLocaleString() : "-"}
                           </span>
                         </td>
                         <td className="py-3 px-4">
