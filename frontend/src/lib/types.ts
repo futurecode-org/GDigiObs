@@ -112,6 +112,8 @@ export interface User {
   user_type: string;
   status: string;
   is_active?: boolean;
+  is_super_admin?: boolean;
+  is_tenant_admin?: boolean;
   tenant_id?: number;
   tenant_name?: string;
   department_name?: string;
@@ -164,6 +166,11 @@ export interface Group {
   member_count: number;
   status: string;
   created_by: number;
+  owner?: {
+    user_id: number;
+    username?: string;
+    nickname?: string;
+  };
   members: GroupMember[];
   created_at: string;
   updated_at: string;

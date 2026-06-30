@@ -409,11 +409,20 @@ export const userApi = {
   getDetail: (userId: number): Promise<User> =>
     get(`/users/${userId}`),
 
-  update: (userId: number, data: unknown): Promise<User> =>
-    put(`/users/${userId}`, data),
+  create: (data: unknown): Promise<User> =>
+    post("/users", data),
 
   assignRoles: (userId: number, roleIds: number[]): Promise<void> =>
     post(`/users/${userId}/roles`, { role_ids: roleIds }),
+
+  delete: (userId: number): Promise<void> =>
+    del(`/users/${userId}`),
+
+  enable: (userId: number): Promise<void> =>
+    post(`/users/${userId}/enable`),
+
+  unban: (userId: number): Promise<void> =>
+    post(`/users/${userId}/unban`),
 
   disable: (userId: number): Promise<void> =>
     post(`/users/${userId}/disable`),
