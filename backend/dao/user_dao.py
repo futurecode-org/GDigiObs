@@ -39,6 +39,48 @@ def count_users_by_tenant(db: Session, tenant_id: int) -> int:
     return db.query(User).filter(User.tenant_id == tenant_id, User.deleted_at.is_(None)).count()
 
 
+def search_users_by_keyword(db: Session, tenant_id: Optional[int], keyword: str, exclude_user_id: Optional[int] = None, page: int = 1, page_size: int = 20) -> List[User]:
+    """根据关键词搜索用户（用户名或昵称）"""
+    query = db.query(User).filter(
+        User.deleted_at.is_(None)
+    )
+    
+    if tenant_id:
+        query = query.filter(User.tenant_id == tenant_id)
+    
+    if exclude_user_id:
+        query = query.filter(User.id != exclude_user_id)
+    
+    if keyword:
+        search_pattern = f"%{keyword}%"
+        query = query.filter(
+            (User.username.like(search_pattern)) | (User.nickname.like(search_pattern))
+        )
+    
+    return query.offset((page - 1) * page_size).limit(page_size).all()
+
+
+def count_search_users_by_keyword(db: Session, tenant_id: Optional[int], keyword: str, exclude_user_id: Optional[int] = None) -> int:
+    """统计搜索结果数量"""
+    query = db.query(User).filter(
+        User.deleted_at.is_(None)
+    )
+    
+    if tenant_id:
+        query = query.filter(User.tenant_id == tenant_id)
+    
+    if exclude_user_id:
+        query = query.filter(User.id != exclude_user_id)
+    
+    if keyword:
+        search_pattern = f"%{keyword}%"
+        query = query.filter(
+            (User.username.like(search_pattern)) | (User.nickname.like(search_pattern))
+        )
+    
+    return query.count()
+
+
 def create_user(db: Session, user: User) -> User:
     """创建用户"""
     try:

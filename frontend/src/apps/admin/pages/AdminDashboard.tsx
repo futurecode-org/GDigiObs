@@ -28,7 +28,7 @@ export function AdminDashboard() {
       setUsers(userList);
 
       const notifList = notifResult.items || [];
-      setNotifications(notifList.filter(n => !n.read));
+      setNotifications(notifList.filter((n: NotificationType) => !n.read));
       setStats({
         users: userResult.total,
         notifications: notifResult.total,

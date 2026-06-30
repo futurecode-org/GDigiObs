@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 
 from dao.user_dao import (
     get_user_by_id, get_users_by_tenant, count_users_by_tenant,
+    search_users_by_keyword, count_search_users_by_keyword,
     update_user, update_user_status, soft_delete_user
 )
 from dao.rbac_dao import get_user_roles, clear_user_roles, assign_role_to_user, get_role_by_id
@@ -26,6 +27,20 @@ def get_user_list(db: Session, ctx: RequestContext, page: int = 1, page_size: in
         # 普通管理员只能看到自己租户的用户
         users = get_users_by_tenant(db, ctx.tenant_id, page, page_size)
         total = count_users_by_tenant(db, ctx.tenant_id)
+    
+    return {
+        "items": users,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total // page_size) + (1 if total % page_size > 0 else 0)
+    }
+
+
+def search_users(db: Session, ctx: RequestContext, keyword: str, page: int = 1, page_size: int = 20) -> Dict:
+    """搜索用户（用于添加好友等场景）"""
+    users = search_users_by_keyword(db, None, keyword, exclude_user_id=ctx.user_id, page=page, page_size=page_size)
+    total = count_search_users_by_keyword(db, None, keyword, exclude_user_id=ctx.user_id)
     
     return {
         "items": users,

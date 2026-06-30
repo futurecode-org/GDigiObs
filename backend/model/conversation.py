@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, JSON
+from sqlalchemy.orm import relationship
 from database.session import Base
 from model.base import BaseModelMixin
 
@@ -12,6 +13,8 @@ class Conversation(Base, BaseModelMixin):
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True, comment="群ID(群聊时)")
     last_message_id = Column(Integer, nullable=True, comment="最近消息ID")
     last_message_at = Column(DateTime, nullable=True, comment="最近消息时间")
+    
+    group = relationship("Group", foreign_keys=[group_id], lazy="joined")
 
 
 class ConversationMember(Base, BaseModelMixin):

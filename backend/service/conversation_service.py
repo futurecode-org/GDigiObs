@@ -29,9 +29,9 @@ def create_direct_conversation(db: Session, current_user: User, target_user_id: 
     if not target_user:
         raise NotFoundException("目标用户不存在")
     
-    # 检查是否同一租户（暂不支持跨租户聊天）
-    if current_user.tenant_id != target_user.tenant_id:
-        raise ForbiddenException("无法与非同租户用户发起会话")
+    # 暂时取消租户限制，允许跨租户会话
+    # if current_user.tenant_id != target_user.tenant_id:
+    #     raise ForbiddenException("无法与非同租户用户发起会话")
     
     # 获取或创建会话
     conversation = get_or_create_direct_conversation(
@@ -76,6 +76,18 @@ def get_conversations(db: Session, current_user: User) -> List[Dict]:
         # 获取成员信息
         members = get_conversation_members(db, conv.id)
         
+        # 构建成员信息列表
+        member_info = []
+        for member in members:
+            user = get_user_by_id(db, member.user_id)
+            member_info.append({
+                "user_id": user.id,
+                "username": user.username,
+                "nickname": user.nickname,
+                "avatar_file_id": user.avatar_file_id,
+                "unread_count": member.unread_count
+            })
+        
         # 对于单聊，获取对方信息
         if conv.type == "direct":
             other_member = None
@@ -101,6 +113,7 @@ def get_conversations(db: Session, current_user: User) -> List[Dict]:
             "id": conv.id,
             "type": conv.type,
             "name": conv_name,
+            "members": member_info,
             "last_message_at": conv.last_message_at,
             "unread_count": unread_count,
             "pinned": current_member.pinned if current_member else False,
@@ -123,6 +136,15 @@ def get_conversation_detail(db: Session, current_user: User, conversation_id: in
     # 获取成员信息
     members = get_conversation_members(db, conversation_id)
     member_info = []
+    
+    # 如果是群聊，获取群成员角色信息
+    group_member_roles = {}
+    if conversation.type == "group" and conversation.group_id:
+        from dao.group_dao import get_group_members
+        group_members = get_group_members(db, conversation.group_id)
+        for gm in group_members:
+            group_member_roles[gm.user_id] = gm.role
+    
     for member in members:
         user = get_user_by_id(db, member.user_id)
         member_info.append({
@@ -130,7 +152,7 @@ def get_conversation_detail(db: Session, current_user: User, conversation_id: in
             "username": user.username,
             "nickname": user.nickname,
             "avatar_file_id": user.avatar_file_id,
-            "role": member.role if conversation.type == "group" else None
+            "role": group_member_roles.get(member.user_id) if conversation.type == "group" else None
         })
     
     # 获取当前用户未读数
@@ -227,14 +249,17 @@ def get_messages(db: Session, current_user: User, conversation_id: int,
     # 转换为响应格式
     message_list = []
     for msg in messages:
+        sender = get_user_by_id(db, msg.sender_id)
         message_list.append({
             "id": msg.id,
             "sender_id": msg.sender_id,
+            "sender_name": sender.nickname or sender.username if sender else "",
             "message_type": msg.message_type,
             "content": msg.content,
             "file_id": msg.file_id,
             "created_at": msg.created_at,
-            "recalled_at": msg.recalled_at
+            "recalled_at": msg.recalled_at,
+            "recalled": msg.recalled_at is not None
         })
     
     return {

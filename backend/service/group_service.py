@@ -19,10 +19,13 @@ from dao.group_dao import (
     get_group_invitation, accept_group_invitation, reject_group_invitation,
     mute_group_member, unmute_group_member, is_group_member_muted
 )
+from model.group import FriendApplication
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from model.user import User
+from service.notification_service import send_notification_service
 from model.group import Group, GroupJoinApplication, GroupInvitation
+from core.ws_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +65,13 @@ def get_groups(db: Session, current_user: User) -> List[Dict]:
         result.append({
             "id": group.id,
             "name": group.name,
-            "avatar_file_id": group.avatar_file_id,
+            "description": group.description,
+            "max_members": group.max_members,
             "member_count": member_count,
-            "owner_id": group.owner_id,
-            "role": role,
-            "status": group.status
+            "status": group.status,
+            "created_by": group.owner_id,
+            "created_at": group.created_at.isoformat() if group.created_at else None,
+            "updated_at": group.updated_at.isoformat() if group.updated_at else None
         })
     
     return result
@@ -88,12 +93,15 @@ def get_group_detail(db: Session, current_user: User, group_id: int) -> Dict:
     for member in members:
         user = get_user_by_id(db, member.user_id)
         member_info.append({
+            "id": member.id,
+            "group_id": member.group_id,
             "user_id": user.id,
             "username": user.username,
             "nickname": user.nickname,
             "avatar_file_id": user.avatar_file_id,
             "role": member.role,
-            "joined_at": member.joined_at
+            "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            "muted_until": member.muted_until.isoformat() if member.muted_until else None
         })
     
     # 获取当前用户角色
@@ -101,19 +109,17 @@ def get_group_detail(db: Session, current_user: User, group_id: int) -> Dict:
     role = current_member.role if current_member else None
     
     return {
-        "group": {
-            "id": group.id,
-            "name": group.name,
-            "avatar_file_id": group.avatar_file_id,
-            "description": group.description,
-            "owner_id": group.owner_id,
-            "max_members": group.max_members,
-            "join_mode": group.join_mode,
-            "allow_member_invite": group.allow_member_invite
-        },
-        "members": member_info,
+        "id": group.id,
+        "name": group.name,
+        "avatar_file_id": group.avatar_file_id,
+        "description": group.description,
+        "max_members": group.max_members,
         "member_count": len(members),
-        "my_role": role
+        "status": group.status,
+        "created_by": group.owner_id,
+        "members": member_info,
+        "created_at": group.created_at.isoformat() if group.created_at else None,
+        "updated_at": group.updated_at.isoformat() if group.updated_at else None
     }
 
 
@@ -266,7 +272,7 @@ def get_friends_service(db: Session, current_user: User) -> List[Dict]:
     return result
 
 
-def apply_friend_service(db: Session, current_user: User, to_user_id: int, message: str = None):
+def apply_friend_service(db: Session, current_user: User, to_user_id: int, message: str = None) -> FriendApplication:
     """申请添加好友"""
     target_user = get_user_by_id(db, to_user_id)
     if not target_user:
@@ -289,6 +295,7 @@ def apply_friend_service(db: Session, current_user: User, to_user_id: int, messa
     
     application = create_friend_application(db, current_user.id, to_user_id, message)
     logger.info(f"申请添加好友: from={current_user.id}, to={to_user_id}")
+    return application
 
 
 def get_friend_applications_service(db: Session, current_user: User) -> List[Dict]:
@@ -300,14 +307,23 @@ def get_friend_applications_service(db: Session, current_user: User) -> List[Dic
         from_user = get_user_by_id(db, app.from_user_id)
         result.append({
             "id": app.id,
+            "from_user_id": app.from_user_id,
+            "to_user_id": app.to_user_id,
+            "message": app.message,
+            "status": app.status,
             "from_user": {
                 "id": from_user.id,
                 "username": from_user.username,
                 "nickname": from_user.nickname,
                 "avatar_file_id": from_user.avatar_file_id
             },
-            "message": app.message,
-            "created_at": app.created_at
+            "from_nickname": from_user.nickname or from_user.username,
+            "from_username": from_user.username,
+            "from_role": from_user.user_type or "",
+            "from_company": "",
+            "type": "friend",
+            "created_at": app.created_at,
+            "updated_at": app.created_at
         })
     
     return result
@@ -371,12 +387,13 @@ def get_group_announcements_service(db: Session, current_user: User, group_id: i
         result.append({
             "id": announcement.id,
             "content": announcement.content,
+            "status": announcement.status,
             "creator": {
                 "id": creator.id,
                 "username": creator.username,
                 "nickname": creator.nickname
             },
-            "created_at": announcement.created_at
+            "created_at": announcement.created_at.isoformat() if announcement.created_at else None
         })
     return result
 
@@ -541,9 +558,6 @@ def invite_to_group_service(db: Session, current_user: User, group_id: int, invi
     if not invitee:
         raise NotFoundException("被邀请用户不存在")
     
-    if invitee.tenant_id != group.tenant_id:
-        raise ForbiddenException("无法邀请非同租户用户")
-    
     if is_group_member(db, group_id, invitee_id):
         raise BadRequestException("已是群成员")
     
@@ -557,6 +571,7 @@ def invite_to_group_service(db: Session, current_user: User, group_id: int, invi
     
     invitation = create_group_invitation(db, group_id, current_user.id, invitee_id, message)
     logger.info(f"邀请进群: inviter_id={current_user.id}, invitee_id={invitee_id}, group_id={group_id}")
+    
     return {
         "id": invitation.id,
         "expires_at": invitation.expires_at
@@ -568,24 +583,24 @@ def get_user_group_invitations_service(db: Session, current_user: User) -> List[
     invitations = get_user_group_invitations(db, current_user.id)
     result = []
     for invite in invitations:
+        if not invite:
+            continue
         group = get_group_by_id(db, invite.group_id)
         inviter = get_user_by_id(db, invite.inviter_id)
         if group and inviter:
             result.append({
                 "id": invite.id,
-                "group": {
-                    "id": group.id,
-                    "name": group.name,
-                    "avatar_file_id": group.avatar_file_id
-                },
-                "inviter": {
-                    "id": inviter.id,
-                    "username": inviter.username,
-                    "nickname": inviter.nickname
-                },
-                "message": invite.message,
-                "expires_at": invite.expires_at,
-                "created_at": invite.created_at
+                "tenant_id": group.tenant_id or 0,
+                "group_id": invite.group_id,
+                "inviter_id": invite.inviter_id,
+                "invitee_id": invite.invitee_id,
+                "message": invite.message or "",
+                "status": invite.status or "pending",
+                "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+                "accepted_at": invite.accepted_at.isoformat() if invite.accepted_at else None,
+                "created_at": invite.created_at.isoformat() if invite.created_at else None,
+                "group_name": group.name or "",
+                "inviter_name": (inviter.nickname or inviter.username) if inviter else ""
             })
     return result
 

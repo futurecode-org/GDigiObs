@@ -51,12 +51,15 @@ export interface MenuItem {
 export interface Notification {
   id: number;
   user_id: number;
-  type: "system" | "task" | "message" | "approval";
+  notification_type: "system" | "task" | "message" | "approval" | "friend_application" | "group_invitation";
+  type?: "system" | "task" | "message" | "approval" | "friend_application" | "group_invitation";
   title: string;
   content: string;
-  read: boolean;
+  data?: any;
+  read?: boolean;
+  status?: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface Conversation {
@@ -92,6 +95,9 @@ export interface Message {
   file_size?: number;
   read: boolean;
   recalled: boolean;
+  audit_status?: "passed" | "blocked" | "reviewing";
+  risk_level?: "none" | "low" | "medium" | "high";
+  risk_tags?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -123,6 +129,8 @@ export interface Friend {
   friend_info: User;
   nickname?: string;
   username?: string;
+  remark?: string;
+  group?: string;
   is_online?: boolean;
   last_online_at?: string;
   status: "pending" | "accepted";
@@ -170,6 +178,47 @@ export interface GroupMember {
   avatar_file_id?: number;
   role: "owner" | "admin" | "member";
   joined_at: string;
+  muted_until?: string;
+}
+
+export interface GroupAnnouncement {
+  id: number;
+  tenant_id: number;
+  group_id: number;
+  content: string;
+  created_by: number;
+  status: "active" | "inactive";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupJoinApplication {
+  id: number;
+  tenant_id: number;
+  group_id: number;
+  user_id: number;
+  message?: string;
+  status: "pending" | "accepted" | "rejected";
+  handled_by?: number;
+  handled_at?: string;
+  created_at: string;
+  username?: string;
+  nickname?: string;
+}
+
+export interface GroupInvitation {
+  id: number;
+  tenant_id: number;
+  group_id: number;
+  inviter_id: number;
+  invitee_id: number;
+  message?: string;
+  status: "pending" | "accepted" | "rejected" | "expired";
+  expires_at: string;
+  accepted_at?: string;
+  created_at: string;
+  group_name?: string;
+  inviter_name?: string;
 }
 
 export interface Agent {
