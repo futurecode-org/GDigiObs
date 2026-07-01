@@ -362,9 +362,12 @@ async def run_task_service(db: Session, ctx: RequestContext, task_id: int):
 
     # 异步执行采集
     from service.scheduler_service import execute_collect_task
-    import asyncio
+    import threading
 
-    asyncio.create_task(execute_collect_task(task_id))
+    def run_async():
+        asyncio.run(execute_collect_task(task_id))
+    thread = threading.Thread(target=run_async, daemon=True)
+    thread.start()
 
     logger.info(f"手动触发采集任务: task_id={task_id}")
     return {"message": "采集任务已触发"}
