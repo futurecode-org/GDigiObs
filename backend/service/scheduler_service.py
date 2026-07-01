@@ -327,3 +327,67 @@ async def load_scheduled_tasks():
         logger.error(f"加载定时采集任务失败: {str(e)}")
     finally:
         db.close()
+
+
+def add_chat_ai_detection_job(schedule_config: Dict[str, Any]):
+    """添加聊天内容 AI 自动检测定时任务"""
+    scheduler = get_scheduler()
+    job_id = "chat_ai_detection"
+
+    # 移除已有任务
+    try:
+        existing = scheduler.get_job(job_id)
+        if existing:
+            scheduler.remove_job(job_id)
+    except Exception:
+        pass
+
+    cron_params = parse_cron_config(schedule_config)
+    if not cron_params:
+        logger.warning(f"聊天 AI 检测定时配置无效: {schedule_config}")
+        return
+
+    try:
+        trigger = CronTrigger(**cron_params)
+        scheduler.add_job(
+            execute_chat_ai_detection_task,
+            trigger=trigger,
+            id=job_id,
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info(f"已添加聊天 AI 自动检测任务: cron={cron_params}")
+    except Exception as e:
+        logger.error(f"添加聊天 AI 自动检测任务失败: {str(e)}")
+
+
+def remove_chat_ai_detection_job():
+    """移除聊天内容 AI 自动检测定时任务"""
+    scheduler = get_scheduler()
+    job_id = "chat_ai_detection"
+    try:
+        existing = scheduler.get_job(job_id)
+        if existing:
+            scheduler.remove_job(job_id)
+            logger.info("已移除聊天 AI 自动检测任务")
+    except Exception as e:
+        logger.error(f"移除聊天 AI 自动检测任务失败: {str(e)}")
+
+
+async def execute_chat_ai_detection_task():
+    """执行聊天内容 AI 自动检测"""
+    from service.chat_ai_detection_service import run_scheduled_chat_ai_detection
+    await run_scheduled_chat_ai_detection()
+
+
+async def load_chat_ai_detection_schedule():
+    """启动时根据配置加载聊天 AI 检测任务"""
+    from core.config import settings
+
+    if not settings.CHAT_AI_DETECTION_ENABLED:
+        logger.info("聊天 AI 自动检测未启用")
+        return
+
+    schedule_config = {"cron": settings.CHAT_AI_DETECTION_CRON}
+    add_chat_ai_detection_job(schedule_config)
