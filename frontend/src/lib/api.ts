@@ -5,6 +5,8 @@ import type {
   AlertRule,
   AnalysisTask,
   AskRecord,
+  AiDetectionResult,
+  ChatAuditMessage,
   CollectedItem,
   CollectedItemDetail,
   CollectLog,
@@ -786,6 +788,25 @@ export const auditApi = {
 
   triggerMessageAlert: (messageId: number): Promise<{ alert_id?: number }> =>
     post(`/audit/messages/${messageId}/alert`),
+
+  // AI 检测
+  getChatMessages: (params?: {
+    audit_status?: string;
+    risk_level?: string;
+    keyword?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedData<ChatAuditMessage>> =>
+    get("/audit/chat-messages", params),
+
+  detectChatContent: (content: string, modelId?: number): Promise<AiDetectionResult> =>
+    post("/audit/chat/detect", { content, model_id: modelId }),
+
+  detectChatMessage: (messageId: number, modelId?: number): Promise<AiDetectionResult & { message_id: number; audit_status: string }> =>
+    post(`/audit/chat-messages/${messageId}/detect`, { model_id: modelId }),
+
+  detectChatBatch: (modelId?: number, limit?: number): Promise<{ processed: number; failed: number; high_risk: number; medium_risk: number; model_id: number; model_name: string }> =>
+    post("/audit/chat/detect-batch", { model_id: modelId, limit }),
 
   // 敏感词库
   getSensitiveWords: (params?: {

@@ -120,8 +120,41 @@ export interface Message {
   audit_status?: "passed" | "blocked" | "reviewing";
   risk_level?: "none" | "low" | "medium" | "high";
   risk_tags?: string[];
+  ai_risk_level?: "none" | "low" | "medium" | "high";
+  ai_risk_tags?: string[];
+  ai_detected_at?: string;
+  ai_model_id?: number;
+  ai_reason?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ChatAuditMessage {
+  id: number;
+  conversation_id: number;
+  sender_id: number;
+  sender_name: string;
+  content?: string;
+  message_type: string;
+  audit_status?: string;
+  risk_level?: string;
+  risk_tags?: string[];
+  ai_risk_level?: string;
+  ai_risk_tags?: string[];
+  ai_detected_at?: string;
+  ai_model_id?: number;
+  ai_reason?: string;
+  created_at?: string;
+}
+
+export interface AiDetectionResult {
+  model_id: number;
+  model_name: string;
+  risk_level: string;
+  risk_tags: string[];
+  reason: string;
+  success: boolean;
+  error?: string;
 }
 
 export interface User {
@@ -660,6 +693,11 @@ export interface MessageAuditItem {
   risk_level: "none" | "low" | "medium" | "high";
   risk_tags?: string[];
   risk_categories?: string[];
+  ai_risk_level?: "none" | "low" | "medium" | "high";
+  ai_risk_tags?: string[];
+  ai_detected_at?: string;
+  ai_model_id?: number;
+  ai_reason?: string;
   created_at: string;
 }
 
