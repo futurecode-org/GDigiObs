@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { Plus, Trash2, Edit, TestTube, Loader2, X, Check, Server, AppWindow } from "lucide-react"
+import { Plus, Trash2, Edit, TestTube, Loader2, X, Check, Server, AppWindow, AlertTriangle } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,12 @@ export function PlatformConfig() {
   const [appDialogOpen, setAppDialogOpen] = useState(false)
   const [editingProvider, setEditingProvider] = useState<DifyProvider | null>(null)
   const [editingApp, setEditingApp] = useState<DifyApp | null>(null)
+
+  // Provider delete dialog
+  const [providerDeleteDialogOpen, setProviderDeleteDialogOpen] = useState(false)
+  const [providerToDelete, setProviderToDelete] = useState<DifyProvider | null>(null)
+  const [providerDeleteKbs, setProviderDeleteKbs] = useState(false)
+  const [providerDeleting, setProviderDeleting] = useState(false)
 
   const [providerForm, setProviderForm] = useState({
     name: "",
@@ -116,15 +122,30 @@ export function PlatformConfig() {
     }
   }
 
-  const handleProviderDelete = async (id: number) => {
-    if (!confirm("确定删除此Provider？关联的App将不可用。")) return
+  const handleProviderDelete = async () => {
+    if (!providerToDelete) return
+    setProviderDeleting(true)
     try {
-      await difyApi.deleteProvider(id)
+      const result = await difyApi.deleteProvider(providerToDelete.id, providerDeleteKbs)
+      let msg = "删除成功"
+      if (result.deleted_kbs_count > 0) {
+        msg += `，已清理 ${result.deleted_kbs_count} 个关联知识库`
+      }
       fetchProviders()
-      toast.success("删除成功")
+      toast.success(msg)
     } catch (error: any) {
       toast.error(error.message || "删除失败")
+    } finally {
+      setProviderDeleting(false)
+      setProviderDeleteDialogOpen(false)
+      setProviderToDelete(null)
     }
+  }
+
+  const openProviderDeleteDialog = (provider: DifyProvider) => {
+    setProviderToDelete(provider)
+    setProviderDeleteKbs(false)
+    setProviderDeleteDialogOpen(true)
   }
 
   const handleTestProvider = async (id: number) => {
@@ -266,7 +287,7 @@ export function PlatformConfig() {
                             <Button variant="ghost" size="sm" onClick={() => handleOpenProviderEdit(p)}>
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleProviderDelete(p.id)}>
+                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => openProviderDeleteDialog(p)}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
@@ -488,6 +509,50 @@ export function PlatformConfig() {
             <Button onClick={handleAppSubmit} disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
               {editingApp ? "保存" : "创建"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Provider Delete Dialog */}
+      <Dialog open={providerDeleteDialogOpen} onOpenChange={setProviderDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={e => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>删除 Dify Provider</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="flex items-center gap-3 text-sm">
+              <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
+              <p>确定要删除 Provider <strong>{providerToDelete?.name}</strong> 吗？</p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="admin-delete-kbs"
+                  checked={!providerDeleteKbs}
+                  onChange={() => setProviderDeleteKbs(false)}
+                  className="accent-primary"
+                />
+                <span>仅删除 Provider 配置，保留关联知识库</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="admin-delete-kbs"
+                  checked={providerDeleteKbs}
+                  onChange={() => setProviderDeleteKbs(true)}
+                  className="accent-destructive"
+                />
+                <span className="text-destructive">同时删除关联的知识库（仅删除本地记录，不删除云端数据）</span>
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProviderDeleteDialogOpen(false)}>取消</Button>
+            <Button variant="destructive" onClick={handleProviderDelete} disabled={providerDeleting}>
+              {providerDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />}
+              删除
             </Button>
           </DialogFooter>
         </DialogContent>

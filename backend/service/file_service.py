@@ -9,7 +9,6 @@ from datetime import datetime
 from dao.file_dao import get_files, count_files, get_file_by_id, create_file, delete_file
 from core.exceptions import NotFoundException, ForbiddenException
 from core.dependencies import RequestContext
-from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +68,8 @@ def upload_file_service(db: Session, ctx: RequestContext, file,
     filename = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}" if "." in file.filename else str(uuid.uuid4())
     original_filename = file.filename
     
-    upload_dir = os.path.join(settings.STATIC_DIR, "uploads", str(ctx.tenant_id))
+    # 文件上传目录：backend/uploads/{tenant_id}
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", str(ctx.tenant_id))
     os.makedirs(upload_dir, exist_ok=True)
     
     storage_path = os.path.join(upload_dir, filename)

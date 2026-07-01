@@ -19,6 +19,7 @@ from controller.group_controller import group_router, friend_router
 from controller.collect_controller import collect_router
 from controller.clean_controller import clean_router
 from controller.analysis_controller import analysis_router
+from controller.chroma_config_controller import chroma_config_router
 from controller.knowledge_controller import knowledge_router
 from controller.model_config_controller import model_router
 from controller.skill_controller import skill_router
@@ -104,6 +105,7 @@ app.include_router(collect_router, prefix="/api/v1")
 app.include_router(clean_router, prefix="/api/v1")
 app.include_router(analysis_router, prefix="/api/v1")
 app.include_router(knowledge_router, prefix="/api/v1")
+app.include_router(chroma_config_router, prefix="/api/v1")
 app.include_router(model_router, prefix="/api/v1")
 app.include_router(skill_router, prefix="/api/v1")
 app.include_router(agent_router, prefix="/api/v1")

@@ -132,7 +132,12 @@ def run_agent_service(db: Session, ctx: RequestContext, agent_id: int, input_dat
     
     run = create_agent_run(db, ctx.tenant_id, agent_id, "manual", ctx.user_id, input_data)
     
-    asyncio.create_task(_execute_agent_async(db, run.id, agent, ctx, input_data or {}))
+    # 在后台线程中执行异步任务（避免 no running event loop 错误）
+    import threading
+    def run_async():
+        asyncio.run(_execute_agent_async(db, run.id, agent, ctx, input_data or {}))
+    thread = threading.Thread(target=run_async, daemon=True)
+    thread.start()
     
     logger.info(f"执行数字员工: agent_id={agent_id}, run_id={run.id}")
     

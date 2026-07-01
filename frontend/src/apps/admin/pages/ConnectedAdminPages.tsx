@@ -1,3 +1,7 @@
+import { ChromaConfigManagement } from "./ChromaConfigManagement"
+export { ChromaConfigManagement }
+import { KnowledgeManagement } from "./KnowledgeManagement"
+export { KnowledgeManagement }
 import { useCallback, useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import { Bot, ClipboardCheck, Database, FileQuestion, KeyRound, Loader2, MessageSquareWarning, Network, Search, ShieldAlert, Sparkles, Workflow } from "lucide-react"
@@ -599,25 +603,6 @@ export function WorkflowManagement() {
         { key: "graph", title: "节点/连线", render: workflow => `${workflow.nodes.length} / ${workflow.edges.length}` },
         { key: "status", title: "状态", render: workflow => statusBadge(workflow.status) },
         { key: "created", title: "创建时间", render: workflow => formatDate(workflow.created_at) },
-      ]}
-    />
-  )
-}
-
-export function KnowledgeManagement() {
-  return (
-    <DataPage<KnowledgeBase>
-      title="知识库管理"
-      icon={<Database className="size-5" />}
-      searchPlaceholder="搜索知识库名称、类型..."
-      fetcher={page => knowledgeApi.getList({ page, page_size: 20 })}
-      filter={(kb, query) => [kb.name, kb.type, kb.description].some(value => value?.toLowerCase().includes(query))}
-      columns={[
-        { key: "name", title: "知识库", render: kb => <span className="font-medium">{kb.name}</span> },
-        { key: "type", title: "类型", render: kb => <Badge variant="outline" className="text-xs">{kb.type}</Badge> },
-        { key: "files", title: "文件/分片", render: kb => `${kb.file_count} / ${kb.chunk_count}` },
-        { key: "status", title: "状态", render: kb => statusBadge(kb.status) },
-        { key: "created", title: "创建时间", render: kb => formatDate(kb.created_at) },
       ]}
     />
   )

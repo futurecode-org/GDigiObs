@@ -101,8 +101,15 @@ def update_provider_service(db: Session, ctx: RequestContext, provider_id: int, 
     return provider
 
 
-def delete_provider_service(db: Session, ctx: RequestContext, provider_id: int) -> bool:
-    """删除 Dify Provider"""
+def delete_provider_service(db: Session, ctx: RequestContext, provider_id: int, delete_kbs: bool = False) -> Dict:
+    """删除 Dify Provider
+    
+    Args:
+        delete_kbs: 是否同时删除该 Provider 关联的知识库（仅删除本地记录，不删除云端数据）
+    
+    Returns:
+        {"deleted": bool, "deleted_kbs_count": int}
+    """
     provider = get_dify_provider_by_id(db, provider_id)
     if not provider:
         raise NotFoundException("Provider不存在")
@@ -110,9 +117,19 @@ def delete_provider_service(db: Session, ctx: RequestContext, provider_id: int) 
     if provider.visibility != "platform" and provider.tenant_id != ctx.tenant_id:
         raise ForbiddenException("无权限删除")
     
+    deleted_kbs_count = 0
+    if delete_kbs:
+        # 查找该 Provider 关联的所有知识库，仅删除本地记录（不删除云端数据）
+        from dao.knowledge_dao import get_knowledge_bases_by_dify_provider, delete_knowledge_base
+        kbs = get_knowledge_bases_by_dify_provider(db, provider_id)
+        for kb in kbs:
+            delete_knowledge_base(db, kb.id)
+            deleted_kbs_count += 1
+            logger.info(f"删除关联知识库: kb_id={kb.id}, name={kb.name}, provider_id={provider_id}")
+    
     delete_dify_provider(db, provider_id)
-    logger.info(f"删除 Dify Provider: id={provider_id}")
-    return True
+    logger.info(f"删除 Dify Provider: id={provider_id}, deleted_kbs={deleted_kbs_count}")
+    return {"deleted": True, "deleted_kbs_count": deleted_kbs_count}
 
 
 async def test_provider_service(db: Session, ctx: RequestContext, provider_id: int) -> Dict:

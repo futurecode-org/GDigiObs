@@ -145,9 +145,12 @@ export async function apiRequest<T = unknown>(
   }
 
   // 对于 POST/PUT/DELETE 请求，如果有 body 且没有指定 Content-Type，则设置为 JSON
+  // 但如果 body 是 FormData，则不设置 Content-Type，让浏览器自动设置 multipart boundary
   const method = options.method?.toUpperCase() || "GET";
   if (!headers.has("Content-Type") && ["POST", "PUT", "DELETE"].includes(method) && options.body) {
-    headers.set("Content-Type", "application/json");
+    if (!(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
   }
 
   const response = await fetch(`${BASE_URL}${url}`, {
@@ -509,8 +512,11 @@ export const knowledgeApi = {
   update: (kbId: number, data: unknown): Promise<KnowledgeBase> =>
     put(`/knowledge/${kbId}`, data),
 
-  delete: (kbId: number): Promise<void> =>
-    del(`/knowledge/${kbId}`),
+  delete: (kbId: number, deleteRemote: boolean = false): Promise<void> =>
+    del(`/knowledge/${kbId}?delete_remote=${deleteRemote}`),
+
+  updatePermissions: (kbId: number, data: { is_public: boolean }): Promise<void> =>
+    put(`/knowledge/${kbId}/permissions`, data),
 
   getFiles: (kbId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<KnowledgeFile>> =>
     get(`/knowledge/${kbId}/files`, params),
@@ -518,11 +524,59 @@ export const knowledgeApi = {
   addFile: (kbId: number, fileId: number): Promise<KnowledgeFile> =>
     post(`/knowledge/${kbId}/files`, { file_id: fileId }),
 
+  uploadFile: (kbId: number, file: File): Promise<unknown> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiRequest(`/knowledge/${kbId}/upload`, {
+      method: "POST",
+      body: formData,
+      // 不设置 Content-Type，让浏览器自动设置 multipart boundary
+    });
+  },
+
   deleteFile: (kbId: number, fileId: number): Promise<void> =>
     del(`/knowledge/${kbId}/files/${fileId}`),
 
   getChunks: (kbId: number, params?: { file_id?: number; page?: number; page_size?: number }): Promise<unknown[]> =>
     get(`/knowledge/${kbId}/chunks`, params),
+
+  retrieveTest: (kbId: number, data: { query: string; top_k?: number }): Promise<RetrieveTestResponse> =>
+    post(`/knowledge/${kbId}/retrieve-test`, data),
+
+  qa: (kbId: number, data: { query: string; top_k?: number; llm_model_id?: number }): Promise<QAResponse> =>
+    post(`/knowledge/${kbId}/qa`, data),
+
+  getDifyModels: (providerId: number, modelType: string = "text-embedding"): Promise<DifyModelProvider[]> =>
+    get(`/knowledge/dify/${providerId}/models`, { model_type: modelType }),
+
+  getDifyDatasets: (providerId: number, params?: { page?: number; limit?: number }): Promise<{ data: unknown[]; total: number }> =>
+    get(`/knowledge/dify/${providerId}/datasets`, params),
+
+  syncDifyDatasets: (providerId: number): Promise<DifySyncResult> =>
+    post(`/knowledge/dify/${providerId}/sync`, {}),
+
+  getLogs: (kbId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<KBRetrievalLog>> =>
+    get(`/knowledge/${kbId}/logs`, params),
+};
+
+export const chromaConfigApi = {
+  getList: (params?: { page?: number; page_size?: number }): Promise<PaginatedData<ChromaConfig>> =>
+    get("/chroma-configs", params),
+
+  create: (data: unknown): Promise<ChromaConfig> =>
+    post("/chroma-configs", data),
+
+  getDetail: (configId: number): Promise<ChromaConfig> =>
+    get(`/chroma-configs/${configId}`),
+
+  update: (configId: number, data: unknown): Promise<ChromaConfig> =>
+    put(`/chroma-configs/${configId}`, data),
+
+  delete: (configId: number): Promise<void> =>
+    del(`/chroma-configs/${configId}`),
+
+  test: (configId: number): Promise<{ connected: boolean }> =>
+    post(`/chroma-configs/${configId}/test`),
 };
 
 export const workflowApi = {
@@ -866,8 +920,8 @@ export const difyApi = {
   updateProvider: (id: number, data: Partial<DifyProvider>): Promise<DifyProvider> =>
     put(`/dify/providers/${id}`, data),
 
-  deleteProvider: (id: number): Promise<void> =>
-    del(`/dify/providers/${id}`),
+  deleteProvider: (id: number, deleteKbs?: boolean): Promise<{ deleted: boolean; deleted_kbs_count: number }> =>
+    del(`/dify/providers/${id}${deleteKbs ? '?delete_kbs=true' : ''}`),
 
   testProvider: (id: number): Promise<{ success: boolean }> =>
     post(`/dify/providers/${id}/test`),

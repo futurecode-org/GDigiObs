@@ -4,7 +4,7 @@ import { TopBar } from "@/shared/components/TopBar"
 import { AdminSidebar } from "@/shared/components/AdminSidebar"
 import { AdminDashboard } from "./pages/AdminDashboard"
 import { TenantManagement, UserManagement, RoleManagement, GroupManagement, DataCollection, DataClean, DataAnalysis, ModelManagement, OpLogs, NotifySettings, PlatformConfig, AdminNotifications } from "./pages/PlaceholderPages"
-import { OrgStructure, Permissions, DataAudit, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, AuditLogs } from "./pages/ConnectedAdminPages"
+import { OrgStructure, Permissions, DataAudit, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, ChatAudit, AuditLogs, ChromaConfigManagement } from "./pages/ConnectedAdminPages"
 import { SensitiveWords } from "./pages/SensitiveWords"
 import { ChatAudit } from "./pages/ChatAudit"
 import { AlertManagement } from "./pages/AlertManagement"
@@ -26,6 +26,7 @@ const pageTitles: Record<AdminPage, string> = {
   agents: "数字员工",
   workflows: "工作流管理",
   knowledge: "知识库管理",
+  "chroma-configs": "Chroma配置",
   query: "智能问数",
   "chat-audit": "聊天审计",
   sensitive: "敏感词库",
@@ -63,6 +64,7 @@ export function AdminApp({ onSwitch }: AdminAppProps) {
       case "agents": return <AgentManagement />
       case "workflows": return <WorkflowManagement />
       case "knowledge": return <KnowledgeManagement />
+      case "chroma-configs": return <ChromaConfigManagement />
       case "query": return <QueryManagement />
       case "chat-audit": return <ChatAudit />
       case "sensitive": return <SensitiveWords />

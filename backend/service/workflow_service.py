@@ -159,7 +159,12 @@ def run_workflow_service(db: Session, ctx: RequestContext, workflow_id: int,
     
     run = create_workflow_run(db, ctx.tenant_id, workflow_id, "manual", ctx.user_id, input_data)
     
-    asyncio.create_task(_execute_workflow_async(db, run.id, workflow, ctx, input_data or {}))
+    # 在后台线程中执行异步任务（避免 no running event loop 错误）
+    import threading
+    def run_async():
+        asyncio.run(_execute_workflow_async(db, run.id, workflow, ctx, input_data or {}))
+    thread = threading.Thread(target=run_async, daemon=True)
+    thread.start()
     
     logger.info(f"执行工作流: workflow_id={workflow_id}, run_id={run.id}")
     

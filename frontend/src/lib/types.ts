@@ -1,4 +1,26 @@
-export interface ApiResponse<T = unknown> {
+export interface DifyAvailableModel {
+  model: string;
+  label: { en_US?: string; zh_Hans?: string };
+  model_type: string;
+  features?: string[];
+  fetch_from: string;
+  model_properties?: Record<string, unknown>;
+  status: string;
+}
+
+export interface DifyModelProvider {
+  provider: string;
+  label: { en_US?: string; zh_Hans?: string };
+  icon_small?: Record<string, string>;
+  icon_large?: Record<string, string>;
+  status: string;
+  models: DifyAvailableModel[];
+}
+
+export interface DifySyncResult {
+  synced_count: number;
+  total_datasets: number;
+}export interface ApiResponse<T = unknown> {
   code: number;
   message: string;
   data: T;
@@ -282,25 +304,102 @@ export interface KnowledgeBase {
   type: string;
   description?: string;
   group_id?: number;
+  provider_type: "local" | "dify";
+  chroma_config_id?: number;
+  dify_provider_id?: number;
+  dify_dataset_id?: string;
   embedding_model_id?: number;
+  rerank_model_id?: number;
+  dify_embedding_model?: string;
+  dify_embedding_model_provider?: string;
+  dify_rerank_model?: string;
+  dify_rerank_model_provider?: string;
+  chunk_size?: number;
+  chunk_overlap?: number;
+  status: string;
+  is_public?: boolean;
   file_count: number;
   chunk_count: number;
-  status: string;
   created_by: number;
   created_at: string;
   updated_at: string;
+  // 详情嵌套对象
+  chroma_config?: { id: number; name: string; host: string };
+  dify_provider?: { id: number; name: string };
+  embedding_model?: { id: number; name: string };
+  rerank_model?: { id: number; name: string };
 }
 
 export interface KnowledgeFile {
   id: number;
   kb_id: number;
   file_id: number;
-  file_name: string;
-  file_size: number;
-  status: string;
+  original_filename?: string;
+  file_size?: number;
+  word_count?: number;
+  parse_status: string;
+  error_message?: string;
   chunk_count: number;
+  dify_document_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface KnowledgeChunk {
+  id: number;
+  kb_id: number;
+  file_id: number;
+  chunk_index: number;
+  content: string;
+  token_count: number;
+  chroma_doc_id?: string;
+  created_at: string;
+}
+
+export interface ChromaConfig {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  collection_prefix: string;
+  visibility: string;
+  status: string;
+  remark?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RetrieveTestResult {
+  id: string;
+  content: string;
+  score: number;
+  metadata: Record<string, unknown>;
+  source: "local" | "dify";
+}
+
+export interface RetrieveTestResponse {
+  query: string;
+  results_count: number;
+  latency_ms: number;
+  results: RetrieveTestResult[];
+}
+
+export interface QAResponse {
+  query: string;
+  answer: string;
+  results_count: number;
+  latency_ms: number;
+  references: RetrieveTestResult[];
+}
+
+export interface KBRetrievalLog {
+  id: number;
+  query: string;
+  retrieval_type: string;
+  results_count: number;
+  latency_ms?: number;
+  status: string;
+  created_at: string;
 }
 
 export interface Workflow {
@@ -695,7 +794,8 @@ export type UserPage =
   | "workflow"
   | "tasks"
   | "notifications"
-  | "settings";
+  | "settings"
+  | "dify-providers";
 
 export type AdminPage =
   | "dashboard"
@@ -714,6 +814,7 @@ export type AdminPage =
   | "agents"
   | "workflows"
   | "knowledge"
+  | "chroma-configs"
   | "query"
   | "chat-audit"
   | "sensitive"

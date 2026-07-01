@@ -248,5 +248,8 @@ lerna-debug.log*
 *.sln
 *.sw?
 
+# Production Files
+backend/uploads/*
+
 # Exclude
 !frontend/src/*
