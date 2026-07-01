@@ -482,7 +482,7 @@ export interface ModelConfig {
   id: number;
   name: string;
   model_key: string;
-  model_type: "chat" | "embedding" | "rerank";
+  model_type: "chat" | "embedding" | "rerank" | "llm";
   api_type: "openai" | "anthropic" | "ollama" | "custom";
   base_url?: string;
   api_key?: string;
@@ -493,11 +493,29 @@ export interface ModelConfig {
   context_length?: number;
   max_tokens?: number;
   temperature?: number;
+  currency?: string;
+  input_price?: number;
+  output_price?: number;
+  price_unit?: string;
   default_config?: unknown;
   status: "enabled" | "disabled";
   created_by: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface ModelUsageRankingItem {
+  model_id: number;
+  name: string;
+  model_key: string;
+  currency: string;
+  input_price?: number;
+  output_price?: number;
+  price_unit: string;
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost: number;
 }
 
 export interface OperationLog {

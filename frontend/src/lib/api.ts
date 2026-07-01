@@ -22,6 +22,7 @@ import type {
   KnowledgeFile,
   Message,
   ModelConfig,
+  ModelUsageRankingItem,
   Notification,
   NotificationSetting,
   OperationLog,
@@ -742,6 +743,9 @@ export const modelApi = {
 
   getTokenUsage: (modelId: number): Promise<unknown> =>
     get(`/models/${modelId}/token-usage`),
+
+  getUsageRanking: (topN: number = 5): Promise<ModelUsageRankingItem[]> =>
+    get("/models/rankings/usage", { top_n: topN }),
 };
 
 export const notificationSettingApi = {
