@@ -75,11 +75,20 @@ def update_provider(
 @dify_router.delete("/providers/{provider_id}", summary="删除 Dify Provider")
 def delete_provider(
     provider_id: int,
+    delete_kbs: bool = False,
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(get_request_context)
 ):
-    delete_provider_service(db, ctx, provider_id)
-    return ApiResponse.success(message="删除成功")
+    """删除 Dify Provider
+    
+    - delete_kbs=false（默认）：仅删除 Provider，保留关联知识库
+    - delete_kbs=true：同时删除该 Provider 关联的知识库（仅删除本地记录，不删除云端数据）
+    """
+    result = delete_provider_service(db, ctx, provider_id, delete_kbs=delete_kbs)
+    msg = "删除成功"
+    if result.get("deleted_kbs_count", 0) > 0:
+        msg += f"，已清理 {result['deleted_kbs_count']} 个关联知识库"
+    return ApiResponse.success(message=msg, data=result)
 
 
 @dify_router.post("/providers/{provider_id}/test", summary="测试 Dify Provider 连接")
