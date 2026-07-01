@@ -303,6 +303,7 @@ def init_system_roles_and_permissions(db: Session):
         Permission(code="audit:alert:manage", name="管理告警规则", type="button"),
         Permission(code="audit:alert:view", name="查看告警记录", type="button"),
         Permission(code="user:mute", name="禁言用户", type="button"),
+        Permission(code="audit:chat_detect", name="聊天内容 AI 检测", type="button"),
     ]
 
     for perm in basic_permissions:
