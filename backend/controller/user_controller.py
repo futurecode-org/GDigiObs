@@ -4,14 +4,15 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from database.session import get_db
-from schema.user import UserResponse, UserUpdate, UserCreate, UserListResponse, AssignRoleRequest
+from schema.user import UserResponse, UserUpdate, UserCreate, UserListResponse, AssignRoleRequest, MuteUserRequest
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
 from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext
 from service.user_service import (
-    get_user_list, get_user_detail, update_user_profile, assign_roles_to_user, 
-    disable_user, enable_user, ban_user, unban_user, search_users, 
+    get_user_list, get_user_detail, update_user_profile, assign_roles_to_user,
+    disable_user, enable_user, ban_user, unban_user, search_users,
     create_new_user, reset_user_password, delete_user, get_user_roles_info
 )
+from service.audit_risk_service import mute_user, unmute_user
 
 from model.user import User
 
@@ -253,3 +254,34 @@ def delete(
     """
     delete_user(db, user_id, ctx)
     return ApiResponse.success(message="用户已删除")
+
+
+
+@user_router.post("/{user_id}/mute", summary="全局禁言用户")
+def mute(
+    user_id: int,
+    data: MuteUserRequest,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """
+    全局禁言用户
+    
+    - 被禁言用户无法发送任何聊天消息
+    - 支持设置禁言时长（分钟）
+    """
+    result = mute_user(db, ctx, user_id, data.duration_minutes)
+    return ApiResponse.success(data=result)
+
+
+@user_router.post("/{user_id}/unmute", summary="解除全局禁言")
+def unmute(
+    user_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """
+    解除用户全局禁言
+    """
+    result = unmute_user(db, ctx, user_id)
+    return ApiResponse.success(data=result)
