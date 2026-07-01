@@ -58,10 +58,11 @@ async def lifespan(app: FastAPI):
         db.close()
 
     # 启动采集调度器
-    from service.scheduler_service import start_scheduler, load_scheduled_tasks
+    from service.scheduler_service import start_scheduler, load_scheduled_tasks, load_chat_ai_detection_schedule
 
     await start_scheduler()
     await load_scheduled_tasks()
+    await load_chat_ai_detection_schedule()
 
     yield
 

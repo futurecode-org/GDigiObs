@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic_settings import BaseSettings
 
@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     CORS_ALLOW_CREDENTIALS: bool = False  # 是否允许携带凭证
     CORS_ALLOW_METHODS: str = ""  # 允许的方法，多个方法用逗号分隔，例如: GET,POST,PUT,DELETE
     CORS_ALLOW_HEADERS: str = ""  # 允许的头部，多个头部用逗号分隔
+
+    # 聊天内容 AI 自动检测配置
+    CHAT_AI_DETECTION_ENABLED: bool = False  # 是否启用定时 AI 检测
+    CHAT_AI_DETECTION_CRON: str = "*/5 * * * *"  # Cron 表达式（分 时 日 月 周）
+    CHAT_AI_DETECTION_MODEL_ID: Optional[int] = None  # 默认模型 ID，为空时自动选择平台 LLM
+    CHAT_AI_DETECTION_BATCH_SIZE: int = 50  # 每次扫描最大消息数
 
     @property
     def DATABASE_URL(self) -> str:
