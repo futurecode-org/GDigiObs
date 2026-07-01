@@ -4,8 +4,10 @@ import { TopBar } from "@/shared/components/TopBar"
 import { AdminSidebar } from "@/shared/components/AdminSidebar"
 import { AdminDashboard } from "./pages/AdminDashboard"
 import { TenantManagement, UserManagement, RoleManagement, GroupManagement, DataCollection, DataClean, DataAnalysis, ModelManagement, OpLogs, NotifySettings, PlatformConfig, AdminNotifications } from "./pages/PlaceholderPages"
-import { OrgStructure, Permissions, DataAudit, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, ChatAudit, AuditLogs } from "./pages/ConnectedAdminPages"
+import { OrgStructure, Permissions, DataAudit, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, AuditLogs } from "./pages/ConnectedAdminPages"
 import { SensitiveWords } from "./pages/SensitiveWords"
+import { ChatAudit } from "./pages/ChatAudit"
+import { AlertManagement } from "./pages/AlertManagement"
 
 const pageTitles: Record<AdminPage, string> = {
   dashboard: "工作台",
@@ -27,6 +29,7 @@ const pageTitles: Record<AdminPage, string> = {
   query: "智能问数",
   "chat-audit": "聊天审计",
   sensitive: "敏感词库",
+  "alert-management": "告警管理",
   "op-logs": "操作日志",
   "audit-logs": "审计日志",
   "notify-settings": "通知设置",
@@ -63,6 +66,7 @@ export function AdminApp({ onSwitch }: AdminAppProps) {
       case "query": return <QueryManagement />
       case "chat-audit": return <ChatAudit />
       case "sensitive": return <SensitiveWords />
+      case "alert-management": return <AlertManagement />
       case "op-logs": return <OpLogs />
       case "audit-logs": return <AuditLogs />
       case "notify-settings": return <NotifySettings />
