@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from database.session import get_db
 from schema.model_config import (
     ModelConfigCreate, ModelConfigUpdate, ModelConfigResponse,
-    ModelConfigListResponse, ModelConnectivityTest
+    ModelConfigListResponse, ModelConnectivityTest, ModelToggleStatus
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
 from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext
@@ -138,12 +138,12 @@ def delete_model(
 @model_router.post("/{model_id}/toggle", summary="启用/停用模型配置")
 def toggle_model_status(
     model_id: int,
-    status: str,
+    data: ModelToggleStatus,
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(get_request_context)
 ):
     """启用/停用模型配置，status: enabled/disabled"""
-    result = toggle_model_status_service(db, ctx, model_id, status)
+    result = toggle_model_status_service(db, ctx, model_id, data.status)
     return ApiResponse.success(data=result)
 
 

@@ -212,13 +212,17 @@ export function ModelManagement() {
       toast.error("请填写必填字段")
       return
     }
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...form,
       context_length: parseInt(form.context_length, 10) || 4096,
       max_tokens: parseInt(form.max_tokens, 10) || 2048,
       temperature: parseFloat(form.temperature) || 0.7,
       input_price: parseFloat(form.input_price) || 0,
       output_price: parseFloat(form.output_price) || 0,
+    }
+    // 编辑模式下，API Key 留空表示不修改，移除该字段
+    if (editingModel && !payload.api_key) {
+      delete payload.api_key
     }
     setSubmitting(true)
     try {
@@ -403,7 +407,12 @@ export function ModelManagement() {
                   </thead>
                   <tbody>
                     {filteredModels.map(model => (
-                      <tr key={model.id} className="border-b border-border last:border-0 hover:bg-muted/50">
+                      <tr
+                        key={model.id}
+                        className={`border-b border-border last:border-0 hover:bg-muted/50 transition-colors ${
+                          model.status === "disabled" ? "opacity-60 bg-muted/30" : ""
+                        }`}
+                      >
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">

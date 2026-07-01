@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def get_models_service(db: Session, ctx: RequestContext, model_type: str = None,
                        page: int = 1, page_size: int = 20) -> Dict:
     """获取模型配置列表"""
-    models = get_model_configs(db, ctx.tenant_id, model_type, None, page, page_size)
+    models = get_model_configs(db, ctx.tenant_id, model_type, None, None, page, page_size)
     total = count_model_configs(db, ctx.tenant_id)
     
     model_list = []
@@ -30,6 +30,7 @@ def get_models_service(db: Session, ctx: RequestContext, model_type: str = None,
             "model_key": model.model_key,
             "model_type": model.model_type,
             "api_type": model.api_type,
+            "base_url": model.base_url,
             "support_tool_call": model.support_tool_call,
             "support_vision": model.support_vision,
             "support_reasoning": model.support_reasoning,
@@ -238,8 +239,8 @@ def toggle_model_status_service(db: Session, ctx: RequestContext, model_id: int,
 
 
 def get_platform_models_service(db: Session) -> List[Dict]:
-    """获取平台预置模型"""
-    models = get_platform_models(db)
+    """获取平台预置模型（仅返回启用的）"""
+    models = get_platform_models(db, status="enabled")
     
     return [
         {
@@ -254,8 +255,8 @@ def get_platform_models_service(db: Session) -> List[Dict]:
 
 
 def get_available_embedding_models(db: Session, ctx: RequestContext) -> List[Dict]:
-    """获取可用的Embedding模型"""
-    models = get_embedding_models(db, ctx.tenant_id)
+    """获取可用的Embedding模型（仅返回启用的）"""
+    models = get_embedding_models(db, ctx.tenant_id, status="enabled")
     
     return [
         {
