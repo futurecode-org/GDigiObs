@@ -14,7 +14,7 @@ from service.model_config_service import (
     update_model_service, delete_model_service, toggle_model_status_service,
     get_platform_models_service, get_available_embedding_models, test_model_service,
     get_model_call_logs_service, get_model_token_usage_service,
-    test_model_connectivity_service
+    get_model_usage_ranking_service, test_model_connectivity_service
 )
 
 from model.user import User
@@ -104,6 +104,9 @@ def create_model(
         context_length=data.context_length,
         max_tokens=data.max_tokens,
         temperature=data.temperature,
+        currency=data.currency,
+        input_price=data.input_price,
+        output_price=data.output_price,
         default_config=data.default_config
     )
     return ApiResponse.success(data=result)
@@ -183,3 +186,17 @@ def get_model_token_usage(
     """获取模型Token消耗统计"""
     result = get_model_token_usage_service(db, ctx, model_id)
     return ApiResponse.success(data=result)
+
+
+@model_router.get("/rankings/usage", summary="获取模型调用排行")
+def get_model_usage_ranking(
+    top_n: int = 5,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """获取模型调用排行及估算费用（工作台用）"""
+    result = get_model_usage_ranking_service(db, ctx, top_n)
+    return ApiResponse.success(data=result)
+
+
+# 路由顺序关键：所有静态路径必须放在 /{model_id} 之前，否则会被捕获为 model_id

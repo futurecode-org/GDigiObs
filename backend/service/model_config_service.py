@@ -35,6 +35,10 @@ def get_models_service(db: Session, ctx: RequestContext, model_type: str = None,
             "context_length": model.context_length,
             "max_tokens": model.max_tokens,
             "temperature": model.temperature,
+            "currency": model.currency,
+            "input_price": model.input_price,
+            "output_price": model.output_price,
+            "price_unit": model.price_unit,
             "visibility": model.visibility,
             "status": model.status,
             "created_at": model.created_at
@@ -78,10 +82,35 @@ def get_model_detail_service(db: Session, ctx: RequestContext, model_id: int) ->
         "context_length": model.context_length,
         "max_tokens": model.max_tokens,
         "temperature": model.temperature,
+        "currency": model.currency,
+        "input_price": model.input_price,
+        "output_price": model.output_price,
+        "price_unit": model.price_unit,
         "default_config": model.default_config,
         "visibility": model.visibility,
         "status": model.status
     }
+
+
+def _price_to_int(price: Optional[float], currency: Optional[str] = "CNY") -> int:
+    """将前端传入的浮点价格（元/百万token）转为数据库存储整数（分/0.0001美元等）
+
+    规则：
+    - CNY/KRW/JPY: 保留两位小数 -> 乘以 100 转为整数（分/韩元/日元）
+    - USD/EUR/GBP等: 保留四位小数 -> 乘以 10000 转为整数（0.0001美元）
+    """
+    if price is None:
+        return 0
+    multiplier = 100 if currency in ("CNY", "KRW", "JPY") else 10000
+    return int(round(price * multiplier))
+
+
+def _price_to_float(price: Optional[int], currency: Optional[str] = "CNY") -> Optional[float]:
+    """将数据库整数价格转回浮点显示"""
+    if price is None:
+        return None
+    multiplier = 100 if currency in ("CNY", "KRW", "JPY") else 10000
+    return round(price / multiplier, 4)
 
 
 def create_model_service(db: Session, ctx: RequestContext, name: str, model_key: str,
@@ -92,6 +121,13 @@ def create_model_service(db: Session, ctx: RequestContext, name: str, model_key:
     api_key_encrypted = None
     if api_key:
         api_key_encrypted = encrypt_api_key(api_key)
+    
+    # 处理价格字段：浮点价格 -> 整数存储
+    currency = kwargs.get("currency") or "CNY"
+    if "input_price" in kwargs and kwargs["input_price"] is not None:
+        kwargs["input_price"] = _price_to_int(kwargs["input_price"], currency)
+    if "output_price" in kwargs and kwargs["output_price"] is not None:
+        kwargs["output_price"] = _price_to_int(kwargs["output_price"], currency)
     
     model = create_model_config(
         db, ctx.tenant_id, ctx.user_id, name, model_key, model_type,
@@ -131,6 +167,14 @@ def update_model_service(db: Session, ctx: RequestContext, model_id: int, **kwar
     if "api_key" in kwargs and kwargs["api_key"]:
         kwargs["api_key_encrypted"] = encrypt_api_key(kwargs["api_key"])
         kwargs.pop("api_key")
+    
+    # 处理价格字段：浮点价格 -> 整数存储
+    if "input_price" in kwargs and kwargs["input_price"] is not None:
+        currency = kwargs.get("currency") or model.currency or "CNY"
+        kwargs["input_price"] = _price_to_int(kwargs["input_price"], currency)
+    if "output_price" in kwargs and kwargs["output_price"] is not None:
+        currency = kwargs.get("currency") or model.currency or "CNY"
+        kwargs["output_price"] = _price_to_int(kwargs["output_price"], currency)
     
     model = update_model_config(db, model_id, **kwargs)
     
@@ -589,16 +633,287 @@ def get_model_call_logs_service(db: Session, ctx: RequestContext, model_id: int 
     }
 
 
-def get_model_token_usage_service(db: Session, ctx: RequestContext, model_id: int = None) -> Dict:
-    """获取模型Token消耗统计"""
-    # TODO: 实现真实的Token消耗统计
-    # 目前返回模拟数据，后续可接入真实的调用记录表
-    
+def _extract_token_usage(usage: Optional[Dict]) -> Dict:
+    """从调用记录的 usage JSON 中提取 prompt/completion/total tokens"""
+    if not usage:
+        return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    prompt = (
+        usage.get("prompt_tokens")
+        or usage.get("input_tokens")
+        or usage.get("prompt")
+        or 0
+    )
+    completion = (
+        usage.get("completion_tokens")
+        or usage.get("output_tokens")
+        or usage.get("completion")
+        or 0
+    )
+    total = (
+        usage.get("total_tokens")
+        or usage.get("total")
+        or ((prompt or 0) + (completion or 0))
+    )
     return {
-        "total_calls": 0,
-        "total_tokens": 0,
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-        "average_tokens_per_call": 0,
+        "prompt_tokens": prompt or 0,
+        "completion_tokens": completion or 0,
+        "total_tokens": total or 0,
+    }
+
+
+def _calculate_cost(prompt_tokens: int, completion_tokens: int,
+                    input_price: Optional[int], output_price: Optional[int],
+                    currency: Optional[str] = "CNY") -> Optional[float]:
+    """根据整数存储的价格计算调用费用（返回前端显示单位：元/美元等）
+
+    价格字段含义：每百万 token 的价格，整数存储。
+    - CNY/KRW/JPY: 以分为单位存储，例如 0.5 元/百万 token -> 50
+    - USD/EUR/GBP: 以 0.0001 为单位存储，例如 0.0025 美元/百万 token -> 25
+    """
+    if input_price is None and output_price is None:
+        return None
+    multiplier = 100 if (currency in ("CNY", "KRW", "JPY")) else 10000
+    input_price_float = (input_price or 0) / multiplier
+    output_price_float = (output_price or 0) / multiplier
+    cost = (
+        (prompt_tokens / 1_000_000) * input_price_float
+        + (completion_tokens / 1_000_000) * output_price_float
+    )
+    return round(cost, 6)
+
+
+def get_model_token_usage_service(db: Session, ctx: RequestContext, model_id: int = None) -> Dict:
+    """获取模型Token消耗统计，并基于模型配置价格估算费用"""
+    from model.dify import DifyCallLog
+    from model.agent import AgentRun
+    from sqlalchemy import or_
+
+    # 获取目标模型，用于按 model_key 关联调用记录
+    target_model = None
+    if model_id:
+        target_model = get_model_config_by_id(db, model_id)
+        if not target_model:
+            raise NotFoundException("模型配置不存在")
+
+    # 基础查询：所有成功/失败的 Dify 调用日志（包含 token_usage）
+    dify_query = db.query(DifyCallLog)
+    if target_model:
+        dify_query = dify_query.filter(DifyCallLog.dify_metadata["model"].astext == target_model.model_key)
+    elif not ctx.is_super_admin and ctx.tenant_id:
+        dify_query = dify_query.filter(DifyCallLog.tenant_id == ctx.tenant_id)
+
+    dify_logs = dify_query.all()
+
+    # Agent 执行记录：通过 digital_agents.model_id 关联
+    agent_query = db.query(AgentRun)
+    if target_model:
+        from model.agent import DigitalAgent
+        agent_query = agent_query.join(DigitalAgent, AgentRun.agent_id == DigitalAgent.id).filter(
+            DigitalAgent.model_id == target_model.id
+        )
+    elif not ctx.is_super_admin and ctx.tenant_id:
+        agent_query = agent_query.filter(AgentRun.tenant_id == ctx.tenant_id)
+
+    agent_runs = agent_query.all()
+
+    total_calls = len(dify_logs) + len(agent_runs)
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    estimated_cost = 0.0
+
+    # 预加载所有模型配置，用于按 model_key 匹配 dify metadata 中的 model
+    all_models = db.query(ModelConfig).filter(ModelConfig.deleted_at == None).all()
+    model_by_key = {m.model_key: m for m in all_models}
+
+    for log in dify_logs:
+        usage = _extract_token_usage(log.token_usage)
+        prompt_tokens += usage["prompt_tokens"]
+        completion_tokens += usage["completion_tokens"]
+        total_tokens += usage["total_tokens"]
+
+        # 匹配 dify_metadata 中的 model 字段与 model_key，取对应价格
+        model_key = None
+        if log.dify_metadata:
+            model_key = log.dify_metadata.get("model")
+        model = model_by_key.get(model_key) if model_key else None
+        if model and (model.input_price is not None or model.output_price is not None):
+            cost = _calculate_cost(
+                usage["prompt_tokens"], usage["completion_tokens"],
+                model.input_price, model.output_price, model.currency
+            )
+            if cost is not None:
+                estimated_cost += cost
+
+    for run in agent_runs:
+        usage = _extract_token_usage(run.output_data.get("token_usage") if run.output_data else None)
+        prompt_tokens += usage["prompt_tokens"]
+        completion_tokens += usage["completion_tokens"]
+        total_tokens += usage["total_tokens"]
+
+        # Agent 直接绑定 model_id，取该模型价格
+        model = None
+        if target_model:
+            model = target_model
+        elif run.agent and run.agent.model_id:
+            model = get_model_config_by_id(db, run.agent.model_id)
+        if model and (model.input_price is not None or model.output_price is not None):
+            cost = _calculate_cost(
+                usage["prompt_tokens"], usage["completion_tokens"],
+                model.input_price, model.output_price, model.currency
+            )
+            if cost is not None:
+                estimated_cost += cost
+
+    average_tokens_per_call = round(total_tokens / total_calls, 2) if total_calls > 0 else 0
+
+    result = {
+        "total_calls": total_calls,
+        "total_tokens": total_tokens,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "average_tokens_per_call": average_tokens_per_call,
         "period": "all"
     }
+    if target_model:
+        result["currency"] = target_model.currency or "CNY"
+        result["input_price"] = _price_to_float(target_model.input_price, target_model.currency)
+        result["output_price"] = _price_to_float(target_model.output_price, target_model.currency)
+        result["estimated_cost"] = round(estimated_cost, 6)
+    return result
+
+
+def get_model_usage_ranking_service(db: Session, ctx: RequestContext, top_n: int = 5) -> List[Dict]:
+    """获取模型调用排行（用于工作台）：按调用次数排序，并展示配置价格/估算费用"""
+    from model.dify import DifyCallLog
+    from model.agent import AgentRun, DigitalAgent
+
+    # 获取当前可见模型
+    query = db.query(ModelConfig).filter(
+        ModelConfig.deleted_at == None,
+        ModelConfig.status == "enabled"
+    )
+    if not ctx.is_super_admin and ctx.tenant_id:
+        from sqlalchemy import or_, and_
+        query = query.filter(
+            or_(
+                ModelConfig.visibility == "platform",
+                and_(ModelConfig.visibility == "tenant", ModelConfig.tenant_id == ctx.tenant_id)
+            )
+        )
+    models = query.all()
+    model_by_key = {m.model_key: m for m in models}
+
+    # 聚合 Dify 调用：按 dify_metadata.model 分组
+    dify_logs = db.query(DifyCallLog).all()
+    dify_stats: Dict[str, Dict] = {}
+    for log in dify_logs:
+        model_key = None
+        if log.dify_metadata:
+            model_key = log.dify_metadata.get("model")
+        if not model_key:
+            continue
+        if model_key not in dify_stats:
+            dify_stats[model_key] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost": 0.0}
+        usage = _extract_token_usage(log.token_usage)
+        dify_stats[model_key]["calls"] += 1
+        dify_stats[model_key]["prompt_tokens"] += usage["prompt_tokens"]
+        dify_stats[model_key]["completion_tokens"] += usage["completion_tokens"]
+        model = model_by_key.get(model_key)
+        if model and (model.input_price is not None or model.output_price is not None):
+            cost = _calculate_cost(
+                usage["prompt_tokens"], usage["completion_tokens"],
+                model.input_price, model.output_price, model.currency
+            )
+            if cost is not None:
+                dify_stats[model_key]["cost"] += cost
+
+    # 聚合 Agent 调用：按 digital_agents.model_id 分组
+    agent_runs = db.query(AgentRun).join(DigitalAgent, AgentRun.agent_id == DigitalAgent.id).all()
+    agent_stats: Dict[int, Dict] = {}
+    for run in agent_runs:
+        model_id = run.agent.model_id if run.agent else None
+        if not model_id:
+            continue
+        if model_id not in agent_stats:
+            agent_stats[model_id] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost": 0.0}
+        usage = _extract_token_usage(run.output_data.get("token_usage") if run.output_data else None)
+        agent_stats[model_id]["calls"] += 1
+        agent_stats[model_id]["prompt_tokens"] += usage["prompt_tokens"]
+        agent_stats[model_id]["completion_tokens"] += usage["completion_tokens"]
+        model = get_model_config_by_id(db, model_id)
+        if model and (model.input_price is not None or model.output_price is not None):
+            cost = _calculate_cost(
+                usage["prompt_tokens"], usage["completion_tokens"],
+                model.input_price, model.output_price, model.currency
+            )
+            if cost is not None:
+                agent_stats[model_id]["cost"] += cost
+
+    # 合并结果，优先用 model_id 为 key 的统一结构
+    merged: Dict[int, Dict] = {}
+    for model in models:
+        merged[model.id] = {
+            "model_id": model.id,
+            "name": model.name,
+            "model_key": model.model_key,
+            "currency": model.currency or "CNY",
+            "input_price": _price_to_float(model.input_price, model.currency),
+            "output_price": _price_to_float(model.output_price, model.currency),
+            "price_unit": model.price_unit or "1M_tokens",
+            "calls": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost": 0.0,
+        }
+
+    for model_key, stats in dify_stats.items():
+        model = model_by_key.get(model_key)
+        if not model:
+            continue
+        entry = merged.setdefault(model.id, {
+            "model_id": model.id,
+            "name": model.name,
+            "model_key": model_key,
+            "currency": model.currency or "CNY",
+            "input_price": _price_to_float(model.input_price, model.currency),
+            "output_price": _price_to_float(model.output_price, model.currency),
+            "price_unit": model.price_unit or "1M_tokens",
+            "calls": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost": 0.0,
+        })
+        entry["calls"] += stats["calls"]
+        entry["prompt_tokens"] += stats["prompt_tokens"]
+        entry["completion_tokens"] += stats["completion_tokens"]
+        entry["cost"] += stats["cost"]
+
+    for model_id, stats in agent_stats.items():
+        model = get_model_config_by_id(db, model_id)
+        if not model:
+            continue
+        entry = merged.setdefault(model.id, {
+            "model_id": model.id,
+            "name": model.name,
+            "model_key": model.model_key,
+            "currency": model.currency or "CNY",
+            "input_price": _price_to_float(model.input_price, model.currency),
+            "output_price": _price_to_float(model.output_price, model.currency),
+            "price_unit": model.price_unit or "1M_tokens",
+            "calls": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost": 0.0,
+        })
+        entry["calls"] += stats["calls"]
+        entry["prompt_tokens"] += stats["prompt_tokens"]
+        entry["completion_tokens"] += stats["completion_tokens"]
+        entry["cost"] += stats["cost"]
+
+    # 按调用次数排序，未配置价格的模型费用为 0 但仍可展示
+    ranking = sorted(merged.values(), key=lambda x: x["calls"], reverse=True)
+    ranking = ranking[:top_n]
+    for item in ranking:
+        item["cost"] = round(item["cost"], 6)
+    return ranking
