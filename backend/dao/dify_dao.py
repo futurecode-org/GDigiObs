@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
 from typing import List, Optional, Dict
 
-from model.dify import DifyProvider, DifyApp, DifyConversation, DifyCallLog, ChatAssistant
+from model.dify import DifyProvider, DifyApp, DifyConversation, DifyCallLog, ChatAssistant, DifyAppGroupMember
 
 
 def get_dify_providers(db: Session, tenant_id: int = None, page: int = 1, page_size: int = 20) -> List[DifyProvider]:
@@ -81,7 +81,8 @@ def count_dify_providers(db: Session, tenant_id: int = None) -> int:
     return query.count()
 
 
-def get_dify_apps(db: Session, tenant_id: int = None, app_type: str = None, page: int = 1, page_size: int = 20) -> List[DifyApp]:
+def get_dify_apps(db: Session, tenant_id: int = None, app_type: str = None,
+                  use_as_digital_employee: bool = None, page: int = 1, page_size: int = 20) -> List[DifyApp]:
     """获取 Dify App 列表"""
     query = db.query(DifyApp).filter(DifyApp.status != "deleted")
     
@@ -94,6 +95,9 @@ def get_dify_apps(db: Session, tenant_id: int = None, app_type: str = None, page
     
     if app_type:
         query = query.filter(DifyApp.app_type == app_type)
+
+    if use_as_digital_employee is not None:
+        query = query.filter(DifyApp.use_as_digital_employee == use_as_digital_employee)
     
     return query.order_by(desc(DifyApp.created_at)).offset((page - 1) * page_size).limit(page_size).all()
 
@@ -139,7 +143,8 @@ def delete_dify_app(db: Session, app_id: int) -> bool:
     return True
 
 
-def count_dify_apps(db: Session, tenant_id: int = None, app_type: str = None) -> int:
+def count_dify_apps(db: Session, tenant_id: int = None, app_type: str = None,
+                    use_as_digital_employee: bool = None) -> int:
     """统计 Dify App 数量"""
     query = db.query(DifyApp).filter(DifyApp.status != "deleted")
     
@@ -152,8 +157,65 @@ def count_dify_apps(db: Session, tenant_id: int = None, app_type: str = None) ->
     
     if app_type:
         query = query.filter(DifyApp.app_type == app_type)
+
+    if use_as_digital_employee is not None:
+        query = query.filter(DifyApp.use_as_digital_employee == use_as_digital_employee)
     
     return query.count()
+
+
+def get_group_dify_app_members(db: Session, group_id: int) -> List[DifyAppGroupMember]:
+    """获取群聊中的 Dify 数字员工"""
+    return db.query(DifyAppGroupMember).filter(
+        DifyAppGroupMember.group_id == group_id,
+        DifyAppGroupMember.status == "normal"
+    ).all()
+
+
+def get_group_dify_app_member(db: Session, group_id: int, dify_app_id: int) -> Optional[DifyAppGroupMember]:
+    """获取指定群聊 Dify 数字员工成员"""
+    return db.query(DifyAppGroupMember).filter(
+        DifyAppGroupMember.group_id == group_id,
+        DifyAppGroupMember.dify_app_id == dify_app_id,
+        DifyAppGroupMember.status == "normal"
+    ).first()
+
+
+def add_dify_app_to_group(db: Session, group_id: int, dify_app_id: int, invited_by: int) -> DifyAppGroupMember:
+    """添加 Dify 数字员工到群聊"""
+    existing = db.query(DifyAppGroupMember).filter(
+        DifyAppGroupMember.group_id == group_id,
+        DifyAppGroupMember.dify_app_id == dify_app_id
+    ).first()
+    if existing:
+        existing.status = "normal"
+        existing.invited_by = invited_by
+        db.commit()
+        return existing
+
+    member = DifyAppGroupMember(
+        group_id=group_id,
+        dify_app_id=dify_app_id,
+        invited_by=invited_by
+    )
+    db.add(member)
+    db.commit()
+    return member
+
+
+def remove_dify_app_from_group(db: Session, group_id: int, dify_app_id: int) -> bool:
+    """从群聊移除 Dify 数字员工"""
+    member = db.query(DifyAppGroupMember).filter(
+        DifyAppGroupMember.group_id == group_id,
+        DifyAppGroupMember.dify_app_id == dify_app_id,
+        DifyAppGroupMember.status == "normal"
+    ).first()
+    if not member:
+        return False
+
+    member.status = "removed"
+    db.commit()
+    return True
 
 
 def get_dify_conversation(db: Session, tenant_id: int, user_id: int, dify_app_id: int,

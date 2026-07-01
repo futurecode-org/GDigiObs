@@ -29,7 +29,7 @@ from model.chroma_config import ChromaConfig
 from model.kb_retrieval_log import KBRetrievalLog
 
 # Dify 模型
-from model.dify import DifyProvider, DifyApp, DifyCallLog
+from model.dify import DifyProvider, DifyApp, DifyCallLog, DifyAppGroupMember
 
 # AI能力模型
 from model.model_config import ModelConfig
@@ -71,7 +71,7 @@ __all__ = [
     "ChromaConfig", "KBRetrievalLog",
     
     # Dify 模型
-    "DifyProvider", "DifyApp", "DifyCallLog",
+    "DifyProvider", "DifyApp", "DifyCallLog", "DifyAppGroupMember",
     
     # AI能力模型
     "ModelConfig", "Skill",

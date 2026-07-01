@@ -3,13 +3,14 @@ import { getAccessToken } from "../lib/api";
 import type { Message } from "../lib/types";
 
 interface WebSocketEvent {
-  event: "message.new" | "message.recalled" | "message.read" | "conversation.updated" | "friend.application.new";
+  event: "message.new" | "message.recalled" | "message.updated" | "message.read" | "conversation.updated" | "friend.application.new";
   data: unknown;
 }
 
 interface UseWebSocketOptions {
   onNewMessage?: (message: Message) => void;
   onMessageRecalled?: (messageId: number) => void;
+  onMessageUpdated?: (message: any) => void;
   onMessageRead?: (conversationId: number) => void;
   onConversationUpdated?: () => void;
   onFriendApplication?: () => void;
@@ -23,6 +24,7 @@ const globalIsConnectingRef = { current: false };
 export function useWebSocket({
   onNewMessage,
   onMessageRecalled,
+  onMessageUpdated,
   onMessageRead,
   onConversationUpdated,
   onFriendApplication,
@@ -32,6 +34,7 @@ export function useWebSocket({
   const handlersRef = useRef({
     onNewMessage,
     onMessageRecalled,
+    onMessageUpdated,
     onMessageRead,
     onConversationUpdated,
     onFriendApplication,
@@ -41,11 +44,12 @@ export function useWebSocket({
     handlersRef.current = {
       onNewMessage,
       onMessageRecalled,
+      onMessageUpdated,
       onMessageRead,
       onConversationUpdated,
       onFriendApplication,
     };
-  }, [onNewMessage, onMessageRecalled, onMessageRead, onConversationUpdated, onFriendApplication]);
+  }, [onNewMessage, onMessageRecalled, onMessageUpdated, onMessageRead, onConversationUpdated, onFriendApplication]);
 
   const startHeartbeat = useCallback(() => {
     if (globalHeartbeatTimerRef.current) {
@@ -103,6 +107,10 @@ export function useWebSocket({
           case "message.recalled":
             const recalledData = wsEvent.data as { message_id: number };
             handlers.onMessageRecalled?.(recalledData.message_id);
+            break;
+          case "message.updated":
+            const updatedMsgData = wsEvent.data as { conversation_id: number; message: any };
+            handlers.onMessageUpdated?.(updatedMsgData.message);
             break;
           case "message.read":
             const readData = wsEvent.data as { conversation_id: number; user_id: number };

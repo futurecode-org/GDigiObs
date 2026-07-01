@@ -47,6 +47,7 @@ class DifyAppCreate(BaseModel):
     output_schema: Optional[Dict] = Field(None, description="输出Schema")
     default_inputs: Optional[Dict] = Field(None, description="默认输入")
     conversation_enabled: bool = Field(True, description="是否启用会话")
+    use_as_digital_employee: bool = Field(False, description="是否用作数字员工")
     visibility: str = Field("personal", description="可见范围: personal/tenant/public")
     status: str = Field("enabled", description="状态: enabled/disabled")
 
@@ -61,6 +62,7 @@ class DifyAppUpdate(BaseModel):
     output_schema: Optional[Dict] = Field(None, description="输出Schema")
     default_inputs: Optional[Dict] = Field(None, description="默认输入")
     conversation_enabled: Optional[bool] = Field(None, description="是否启用会话")
+    use_as_digital_employee: Optional[bool] = Field(None, description="是否用作数字员工")
     visibility: Optional[str] = Field(None, description="可见范围")
     status: Optional[str] = Field(None, description="状态")
 
@@ -78,6 +80,7 @@ class DifyAppResponse(BaseModel):
     output_schema: Optional[Dict]
     default_inputs: Optional[Dict]
     conversation_enabled: bool
+    use_as_digital_employee: bool
     visibility: str
     review_status: str
     status: str
@@ -174,4 +177,11 @@ class ChatRequest(BaseModel):
     """与助手对话请求"""
     message: str = Field(..., description="用户消息")
     conversation_id: Optional[int] = Field(None, description="系统会话ID")
+    files: Optional[List[Dict]] = Field(None, description="多模态文件")
+
+
+class DifyDigitalEmployeeChatRequest(BaseModel):
+    """与 Dify 数字员工对话请求"""
+    message: str = Field(..., description="用户消息")
+    conversation_id: Optional[str] = Field(None, description="Dify 会话ID")
     files: Optional[List[Dict]] = Field(None, description="多模态文件")

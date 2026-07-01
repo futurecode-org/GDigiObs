@@ -130,7 +130,7 @@ class DifyClient:
         elif data.get("event") == "error":
             result.success = False
             result.error_message = data.get("message", "")
-        elif data.get("event") == "content" and data.get("answer"):
+        elif data.get("answer"):
             result.answer += data["answer"]
     
     async def stream_invoke(self, app: DifyApp, inputs: Dict, query: Optional[str] = None,

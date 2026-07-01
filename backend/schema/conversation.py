@@ -46,12 +46,20 @@ class MessageCreate(BaseModel):
     file_id: Optional[int] = Field(None, description="文件ID")
 
 
+class DifyAppGroupMemberCreate(BaseModel):
+    """添加 Dify 数字员工到群聊"""
+    dify_app_id: int = Field(..., description="Dify App ID")
+
+
 class MessageResponse(BaseModel):
     """消息响应"""
     id: int
     tenant_id: int
     conversation_id: int
     sender_id: int
+    sender_type: str = "user"
+    sender_display_name: Optional[str] = None
+    dify_app_id: Optional[int] = None
     message_type: str
     content: Optional[str] = None
     file_id: Optional[int] = None

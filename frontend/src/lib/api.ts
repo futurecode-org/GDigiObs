@@ -14,8 +14,12 @@ import type {
   CollectTask,
   Conversation,
   CurrentUserResponse,
+  ChromaConfig,
+  DifyAvailableModel,
   DifyApp,
+  DifyModelProvider,
   DifyProvider,
+  DifySyncResult,
   Friend,
   FriendApplication,
   Group,
@@ -23,6 +27,7 @@ import type {
   GroupInvitation,
   GroupJoinApplication,
   KnowledgeBase,
+  KBRetrievalLog,
   KnowledgeFile,
   Message,
   MessageAuditItem,
@@ -34,6 +39,8 @@ import type {
   PaginatedData,
   Permission,
   Role,
+  QAResponse,
+  RetrieveTestResponse,
   SensitiveWord,
   Skill,
   SystemEmailConfig,
@@ -44,7 +51,8 @@ import type {
   WorkflowRun,
 } from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+const BASE_URL = API_BASE_URL;
 
 const STORAGE_KEYS = {
   ACCESS_TOKEN: "gdigi_access_token",
@@ -353,6 +361,12 @@ export const groupApi = {
   addMembers: (groupId: number, userIds: number[]): Promise<void> =>
     post(`/groups/${groupId}/members`, { user_ids: userIds }),
 
+  addDifyApp: (groupId: number, difyAppId: number): Promise<void> =>
+    post(`/groups/${groupId}/dify-apps`, { dify_app_id: difyAppId }),
+
+  removeDifyApp: (groupId: number, difyAppId: number): Promise<void> =>
+    del(`/groups/${groupId}/dify-apps/${difyAppId}`),
+
   removeMember: (groupId: number, userId: number): Promise<void> =>
     del(`/groups/${groupId}/members/${userId}`),
 
@@ -550,6 +564,9 @@ export const knowledgeApi = {
 
   getDifyModels: (providerId: number, modelType: string = "text-embedding"): Promise<DifyModelProvider[]> =>
     get(`/knowledge/dify/${providerId}/models`, { model_type: modelType }),
+
+  getDifyAvailableModels: (providerId: number): Promise<DifyAvailableModel[]> =>
+    get(`/knowledge/dify/${providerId}/models`),
 
   getDifyDatasets: (providerId: number, params?: { page?: number; limit?: number }): Promise<{ data: unknown[]; total: number }> =>
     get(`/knowledge/dify/${providerId}/datasets`, params),
@@ -947,13 +964,13 @@ export const difyApi = {
   testProvider: (id: number): Promise<{ success: boolean }> =>
     post(`/dify/providers/${id}/test`),
 
-  getApps: (params?: { app_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<DifyApp>> =>
+  getApps: (params?: { app_type?: string; use_as_digital_employee?: boolean; page?: number; page_size?: number }): Promise<PaginatedData<DifyApp>> =>
     get("/dify/apps", params),
 
   getProviderApps: (providerId: number): Promise<PaginatedData<DifyApp>> =>
     get(`/dify/providers/${providerId}/apps`),
 
-  createApp: (data: { name: string; provider_id: number; app_type: string; api_endpoint: string; response_mode?: string; input_schema?: unknown; output_schema?: unknown; default_inputs?: unknown; conversation_enabled?: boolean; visibility?: string; status?: string }): Promise<DifyApp> =>
+  createApp: (data: { name: string; provider_id: number; app_type: string; api_endpoint: string; response_mode?: string; input_schema?: unknown; output_schema?: unknown; default_inputs?: unknown; conversation_enabled?: boolean; use_as_digital_employee?: boolean; visibility?: string; status?: string }): Promise<DifyApp> =>
     post("/dify/apps", data),
 
   updateApp: (id: number, data: Partial<DifyApp>): Promise<DifyApp> =>
@@ -964,4 +981,7 @@ export const difyApi = {
 
   testApp: (id: number): Promise<{ success: boolean; message?: string }> =>
     post(`/dify/apps/${id}/test`),
+
+  chatDigitalEmployee: (id: number, data: { message: string; conversation_id?: string; files?: unknown[] }): Promise<{ success: boolean; answer?: string; conversation_id?: string }> =>
+    post(`/dify/apps/${id}/digital-employee/chat`, data),
 };

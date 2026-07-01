@@ -32,9 +32,20 @@ class DifyApp(Base, BaseModelMixin):
     output_schema = Column(JSON, nullable=True, comment="输出Schema")
     default_inputs = Column(JSON, nullable=True, comment="默认输入")
     conversation_enabled = Column(Boolean, default=True, comment="是否启用会话")
+    use_as_digital_employee = Column(Boolean, default=False, comment="是否用作数字员工")
     visibility = Column(String(20), default="personal", comment="可见范围: personal/tenant/public")
     review_status = Column(String(20), default="approved", comment="审核状态: draft/pending/approved/rejected")
     status = Column(String(20), default="enabled", comment="状态: enabled/disabled")
+
+
+class DifyAppGroupMember(Base, BaseModelMixin):
+    """群聊中的 Dify 数字员工成员"""
+    __tablename__ = "dify_app_group_members"
+
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False, index=True, comment="群ID")
+    dify_app_id = Column(Integer, ForeignKey("dify_apps.id"), nullable=False, index=True, comment="Dify App ID")
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=False, comment="邀请人ID")
+    status = Column(String(20), default="normal", comment="状态: normal/removed")
 
 
 class DifyConversation(Base, BaseModelMixin):

@@ -49,6 +49,7 @@ export function PlatformConfig() {
     visibility: "personal",
     status: "enabled",
     conversation_enabled: true,
+    use_as_digital_employee: false,
   })
 
   const fetchProviders = useCallback(async () => {
@@ -159,7 +160,7 @@ export function PlatformConfig() {
 
   const handleOpenAppCreate = () => {
     setEditingApp(null)
-    setAppForm({ name: "", provider_id: providers[0]?.id || 0, app_type: "workflow", api_endpoint: "/workflows/run", response_mode: "blocking", visibility: "personal", status: "enabled", conversation_enabled: true })
+    setAppForm({ name: "", provider_id: providers[0]?.id || 0, app_type: "workflow", api_endpoint: "/workflows/run", response_mode: "blocking", visibility: "personal", status: "enabled", conversation_enabled: true, use_as_digital_employee: false })
     setAppDialogOpen(true)
   }
 
@@ -174,6 +175,7 @@ export function PlatformConfig() {
       visibility: app.visibility,
       status: app.status,
       conversation_enabled: app.conversation_enabled,
+      use_as_digital_employee: app.use_as_digital_employee || false,
     })
     setAppDialogOpen(true)
   }
@@ -322,6 +324,7 @@ export function PlatformConfig() {
                       <TableHead>名称</TableHead>
                       <TableHead>类型</TableHead>
                       <TableHead>Provider</TableHead>
+                      <TableHead>数字员工</TableHead>
                       <TableHead>状态</TableHead>
                       <TableHead className="text-right">操作</TableHead>
                     </TableRow>
@@ -337,6 +340,11 @@ export function PlatformConfig() {
                           <Badge variant="outline" className="text-xs">{app.app_type}</Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{getProviderName(app.provider_id)}</TableCell>
+                        <TableCell>
+                          <Badge variant={app.use_as_digital_employee ? "secondary" : "outline"} className="text-xs">
+                            {app.use_as_digital_employee ? "是" : "否"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={app.status === "enabled" ? "secondary" : "destructive"} className="text-xs">
                             {app.status === "enabled" ? "启用" : "停用"}
@@ -502,6 +510,13 @@ export function PlatformConfig() {
                 <p className="text-xs text-muted-foreground">对话类应用需要维护会话</p>
               </div>
               <Switch checked={appForm.conversation_enabled} onCheckedChange={checked => setAppForm(prev => ({ ...prev, conversation_enabled: checked }))} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label>用作数字员工</Label>
+                <p className="text-xs text-muted-foreground">开启后显示在数字员工页，可私聊并加入群聊</p>
+              </div>
+              <Switch checked={appForm.use_as_digital_employee} onCheckedChange={checked => setAppForm(prev => ({ ...prev, use_as_digital_employee: checked }))} />
             </div>
           </div>
           <DialogFooter>

@@ -87,11 +87,13 @@ export interface Notification {
 export interface Conversation {
   id: number;
   type: "direct" | "group";
+  group_id?: number;
   name?: string;
   unread_count: number;
   message_count?: number;
   last_message?: Message;
   members: ConversationMember[];
+  dify_app_members?: ConversationDifyAppMember[];
   created_at: string;
   updated_at: string;
 }
@@ -105,10 +107,24 @@ export interface ConversationMember {
   role?: string;
 }
 
+export interface ConversationDifyAppMember {
+  id: number;
+  group_id: number;
+  dify_app_id: number;
+  name: string;
+  app_type: string;
+  status: string;
+  role: "dify_app";
+  joined_at?: string;
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
   sender_id: number;
+  sender_type?: "user" | "dify_app" | "system";
+  sender_display_name?: string;
+  dify_app_id?: number;
   sender_name: string;
   message_type: "text" | "image" | "file" | "system";
   content: string;
@@ -227,6 +243,7 @@ export interface Group {
     nickname?: string;
   };
   members: GroupMember[];
+  dify_app_members?: ConversationDifyAppMember[];
   created_at: string;
   updated_at: string;
 }
@@ -812,6 +829,7 @@ export interface DifyApp {
   output_schema?: unknown;
   default_inputs?: unknown;
   conversation_enabled: boolean;
+  use_as_digital_employee: boolean;
   visibility: string;
   review_status: string;
   status: string;

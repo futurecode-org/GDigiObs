@@ -13,7 +13,7 @@ from schema.dify import (
     DifyAppCreate, DifyAppUpdate, DifyAppResponse,
     DifyInvokeRequest, DifyInvokeResponse, DifyCallLogResponse,
     ChatAssistantCreate, ChatAssistantUpdate, ChatAssistantResponse,
-    ChatRequest
+    ChatRequest, DifyDigitalEmployeeChatRequest
 )
 from service.dify_service import (
     get_providers_service, get_provider_service, create_provider_service,
@@ -23,7 +23,7 @@ from service.dify_service import (
     test_app_service, get_call_logs_service,
     get_assistants_service, get_assistant_service, create_assistant_service,
     update_assistant_service, delete_assistant_service, chat_with_assistant_service,
-    get_apps_by_provider_service
+    get_apps_by_provider_service, chat_with_dify_digital_employee_service
 )
 
 dify_router = APIRouter(prefix="/dify", tags=["Dify"])
@@ -114,12 +114,13 @@ def get_provider_apps(
 @dify_router.get("/apps", summary="获取 Dify App 列表")
 def get_apps(
     app_type: Optional[str] = Query(None),
+    use_as_digital_employee: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     ctx: RequestContext = Depends(get_request_context)
 ):
-    result = get_apps_service(db, ctx, app_type, page, page_size)
+    result = get_apps_service(db, ctx, app_type, use_as_digital_employee, page, page_size)
     return ApiResponse.success(data=result)
 
 
@@ -185,6 +186,19 @@ async def invoke_app(
         db, ctx, app_id,
         data.inputs, data.query, data.conversation_id,
         data.files, data.scene
+    )
+    return ApiResponse.success(data=result)
+
+
+@dify_router.post("/apps/{app_id}/digital-employee/chat", summary="与 Dify 数字员工对话")
+async def chat_with_dify_digital_employee(
+    app_id: int,
+    data: DifyDigitalEmployeeChatRequest,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    result = await chat_with_dify_digital_employee_service(
+        db, ctx, app_id, data.message, data.conversation_id, data.files
     )
     return ApiResponse.success(data=result)
 
