@@ -70,6 +70,11 @@ class ModelConfigListResponse(BaseModel):
     page_size: int
 
 
+class ModelToggleStatus(BaseModel):
+    """启用/停用模型配置请求"""
+    status: str = Field(..., description="状态: enabled/disabled")
+
+
 class ModelConnectivityTest(BaseModel):
     """模型连通性测试请求"""
     base_url: str = Field(..., max_length=500, description="API地址")

@@ -8,11 +8,10 @@ from model.model_config import ModelConfig
 
 
 def get_model_configs(db: Session, tenant_id: int = None, model_type: str = None,
-                      visibility: str = None, page: int = 1, page_size: int = 20) -> List[ModelConfig]:
+                      visibility: str = None, status: str = None, page: int = 1, page_size: int = 20) -> List[ModelConfig]:
     """获取模型配置列表"""
     query = db.query(ModelConfig).filter(
-        ModelConfig.deleted_at == None,
-        ModelConfig.status == "enabled"
+        ModelConfig.deleted_at == None
     )
     
     # 可见范围过滤
@@ -32,14 +31,16 @@ def get_model_configs(db: Session, tenant_id: int = None, model_type: str = None
     if visibility:
         query = query.filter(ModelConfig.visibility == visibility)
     
+    if status:
+        query = query.filter(ModelConfig.status == status)
+    
     return query.order_by(desc(ModelConfig.created_at)).offset((page - 1) * page_size).limit(page_size).all()
 
 
-def count_model_configs(db: Session, tenant_id: int = None) -> int:
+def count_model_configs(db: Session, tenant_id: int = None, status: str = None) -> int:
     """统计模型配置数量"""
     query = db.query(ModelConfig).filter(
-        ModelConfig.deleted_at == None,
-        ModelConfig.status == "enabled"
+        ModelConfig.deleted_at == None
     )
     
     if tenant_id:
@@ -49,6 +50,9 @@ def count_model_configs(db: Session, tenant_id: int = None) -> int:
                 and_(ModelConfig.visibility == "tenant", ModelConfig.tenant_id == tenant_id)
             )
         )
+    
+    if status:
+        query = query.filter(ModelConfig.status == status)
     
     return query.count()
 
@@ -106,20 +110,22 @@ def delete_model_config(db: Session, model_id: int) -> bool:
     return True
 
 
-def get_platform_models(db: Session, model_type: str = None) -> List[ModelConfig]:
+def get_platform_models(db: Session, model_type: str = None, status: str = None) -> List[ModelConfig]:
     """获取平台预置模型"""
     query = db.query(ModelConfig).filter(
         ModelConfig.visibility == "platform",
-        ModelConfig.deleted_at == None,
-        ModelConfig.status == "enabled"
+        ModelConfig.deleted_at == None
     )
     
     if model_type:
         query = query.filter(ModelConfig.model_type == model_type)
     
+    if status:
+        query = query.filter(ModelConfig.status == status)
+    
     return query.all()
 
 
-def get_embedding_models(db: Session, tenant_id: int) -> List[ModelConfig]:
+def get_embedding_models(db: Session, tenant_id: int, status: str = None) -> List[ModelConfig]:
     """获取可用的Embedding模型"""
-    return get_model_configs(db, tenant_id, model_type="embedding")
+    return get_model_configs(db, tenant_id, model_type="embedding", status=status)
