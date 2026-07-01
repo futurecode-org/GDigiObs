@@ -8,6 +8,7 @@ from dao.model_config_dao import (
     create_model_config, update_model_config, delete_model_config,
     get_platform_models, get_embedding_models
 )
+from model.model_config import ModelConfig
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from core.dependencies import RequestContext
 from core.security import encrypt_api_key, decrypt_api_key
@@ -698,7 +699,13 @@ def get_model_token_usage_service(db: Session, ctx: RequestContext, model_id: in
     # 基础查询：所有成功/失败的 Dify 调用日志（包含 token_usage）
     dify_query = db.query(DifyCallLog)
     if target_model:
-        dify_query = dify_query.filter(DifyCallLog.dify_metadata["model"].astext == target_model.model_key)
+        # MySQL JSON 字段过滤：dify_metadata ->> '$.model'
+        from sqlalchemy import text as sa_text, bindparam
+        dify_query = dify_query.filter(
+            sa_text("dify_call_logs.dify_metadata ->> '$.model' = :model_key").bindparams(
+                bindparam("model_key", target_model.model_key)
+            )
+        )
     elif not ctx.is_super_admin and ctx.tenant_id:
         dify_query = dify_query.filter(DifyCallLog.tenant_id == ctx.tenant_id)
 
@@ -733,8 +740,8 @@ def get_model_token_usage_service(db: Session, ctx: RequestContext, model_id: in
         total_tokens += usage["total_tokens"]
 
         # 匹配 dify_metadata 中的 model 字段与 model_key，取对应价格
-        model_key = None
-        if log.dify_metadata:
+        model_key = target_model.model_key if target_model else None
+        if not model_key and log.dify_metadata:
             model_key = log.dify_metadata.get("model")
         model = model_by_key.get(model_key) if model_key else None
         if model and (model.input_price is not None or model.output_price is not None):
