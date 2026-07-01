@@ -18,6 +18,7 @@ class User(Base, BaseModelMixin):
     user_type = Column(String(20), default="internal", comment="用户类型: external/internal/admin")
     status = Column(String(20), default="normal", comment="状态: normal/disabled/banned/pending")
     last_login_at = Column(DateTime, nullable=True, comment="最近登录时间")
+    muted_until = Column(DateTime, nullable=True, comment="全局禁言截止时间")
     deleted_at = Column(DateTime, nullable=True, comment="删除时间")
 
 
