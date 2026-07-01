@@ -98,3 +98,8 @@ class ChangePasswordRequest(BaseModel):
     """修改密码请求"""
     old_password: str = Field(..., description="旧密码")
     new_password: str = Field(..., min_length=8, max_length=100, description="新密码")
+
+
+class MuteUserRequest(BaseModel):
+    """禁言用户请求"""
+    duration_minutes: int = Field(..., ge=1, le=525600, description="禁言时长（分钟，1-525600）")
