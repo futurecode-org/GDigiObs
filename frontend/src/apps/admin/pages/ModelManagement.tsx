@@ -43,6 +43,14 @@ const VISIBILITY_OPTIONS = [
   { value: "personal", label: "个人" },
 ]
 
+const CURRENCY_OPTIONS = [
+  { value: "CNY", label: "CNY (人民币)", symbol: "¥" },
+  { value: "USD", label: "USD (美元)", symbol: "$" },
+  { value: "EUR", label: "EUR (欧元)", symbol: "€" },
+  { value: "JPY", label: "JPY (日元)", symbol: "¥" },
+  { value: "KRW", label: "KRW (韩元)", symbol: "₩" },
+]
+
 const TYPE_FILTER_OPTIONS = [
   { value: "all", label: "全部" },
   { value: "llm", label: "大语言模型" },
@@ -63,6 +71,9 @@ interface ModelFormData {
   context_length: string
   max_tokens: string
   temperature: string
+  currency: string
+  input_price: string
+  output_price: string
   visibility: string
 }
 
@@ -79,6 +90,9 @@ const emptyForm: ModelFormData = {
   context_length: "4096",
   max_tokens: "2048",
   temperature: "0.7",
+  currency: "CNY",
+  input_price: "0",
+  output_price: "0",
   visibility: "tenant",
 }
 
@@ -185,6 +199,9 @@ export function ModelManagement() {
       context_length: String(model.context_length || 4096),
       max_tokens: String(model.max_tokens || 2048),
       temperature: String(model.temperature ?? 0.7),
+      currency: model.currency || "CNY",
+      input_price: String(model.input_price ?? 0),
+      output_price: String(model.output_price ?? 0),
       visibility: model.visibility,
     })
     setDialogOpen(true)
@@ -200,6 +217,8 @@ export function ModelManagement() {
       context_length: parseInt(form.context_length, 10) || 4096,
       max_tokens: parseInt(form.max_tokens, 10) || 2048,
       temperature: parseFloat(form.temperature) || 0.7,
+      input_price: parseFloat(form.input_price) || 0,
+      output_price: parseFloat(form.output_price) || 0,
     }
     // 编辑模式下，API Key 留空表示不修改，移除该字段
     if (editingModel && !payload.api_key) {
@@ -667,6 +686,79 @@ export function ModelManagement() {
               </Select>
             </div>
             <div className="space-y-3 border rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">价格配置</Label>
+                <span className="text-xs text-muted-foreground">
+                  {(() => {
+                    const currency = CURRENCY_OPTIONS.find(c => c.value === form.currency)
+                    const input = parseFloat(form.input_price) || 0
+                    const output = parseFloat(form.output_price) || 0
+                    return input === 0 && output === 0
+                      ? "未配置价格"
+                      : `${currency?.symbol || "¥"}${input.toFixed(4)} / ${currency?.symbol || "¥"}${output.toFixed(4)} 每百万 token`
+                  })()}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">币种</Label>
+                  <Select
+                    value={form.currency}
+                    onValueChange={v => setForm(f => ({ ...f, currency: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCY_OPTIONS.map(o => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">输入价格 / 百万 token</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={form.input_price}
+                    onChange={e => setForm(f => ({ ...f, input_price: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">输出价格 / 百万 token</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={form.output_price}
+                    onChange={e => setForm(f => ({ ...f, output_price: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              {connectivityResult?.total_tokens !== undefined && (
+                <div className="text-xs text-muted-foreground bg-muted rounded p-2">
+                  {(() => {
+                    const currency = CURRENCY_OPTIONS.find(c => c.value === form.currency)
+                    const input = parseFloat(form.input_price) || 0
+                    const output = parseFloat(form.output_price) || 0
+                    const prompt = connectivityResult.prompt_tokens ?? 0
+                    const completion = connectivityResult.completion_tokens ?? 0
+                    const total = connectivityResult.total_tokens ?? (prompt + completion)
+                    const estimated = total > 0
+                      ? (prompt / 1_000_000) * input + (completion / 1_000_000) * output
+                      : 0
+                    return estimated > 0
+                      ? `本次测试约 ${total} tokens，按当前价格估算约 ${currency?.symbol || "¥"}${estimated.toFixed(6)}`
+                      : `本次测试约 ${total} tokens，未配置价格无法估算费用`
+                  })()}
+                </div>
+              )}
+            </div>
+            <div className="space-y-3 border rounded-lg p-3">
               <Label className="text-sm font-medium">功能支持</Label>
               <div className="flex gap-4">
                 <div className="flex items-center gap-2">
@@ -778,6 +870,18 @@ export function ModelManagement() {
                   <div className="text-2xl font-bold">{(tokenUsage as any).completion_tokens || 0}</div>
                   <div className="text-xs text-muted-foreground mt-1">Completion Tokens</div>
                 </div>
+                {(tokenUsage as any).estimated_cost !== undefined && (
+                  <div className="bg-muted rounded-lg p-4 text-center col-span-2">
+                    <div className="text-2xl font-bold">
+                      {(tokenUsage as any).currency === "USD" ? "$" :
+                        (tokenUsage as any).currency === "EUR" ? "€" :
+                        (tokenUsage as any).currency === "JPY" ? "¥" :
+                        (tokenUsage as any).currency === "KRW" ? "₩" : "¥"}
+                      {(tokenUsage as any).estimated_cost?.toFixed ? (tokenUsage as any).estimated_cost.toFixed(6) : (tokenUsage as any).estimated_cost}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">估算费用（{(tokenUsage as any).currency || "CNY"}）</div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center text-muted-foreground py-8">暂无 Token 消耗数据</div>

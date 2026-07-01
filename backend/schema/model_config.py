@@ -18,6 +18,9 @@ class ModelConfigCreate(BaseModel):
     max_tokens: int = Field(2048, description="最大Token")
     default_config: Optional[Dict] = Field(None, description="默认参数配置")
     temperature: Optional[float] = Field(0.7, ge=0, le=2, description="默认温度")
+    currency: Optional[str] = Field("CNY", max_length=10, description="价格币种")
+    input_price: Optional[float] = Field(0, ge=0, description="输入价格(每百万token)")
+    output_price: Optional[float] = Field(0, ge=0, description="输出价格(每百万token)")
     visibility: str = Field("tenant", description="可见范围: platform/tenant/personal")
 
 
@@ -34,6 +37,9 @@ class ModelConfigUpdate(BaseModel):
     max_tokens: Optional[int] = None
     default_config: Optional[Dict] = None
     temperature: Optional[float] = None
+    currency: Optional[str] = None
+    input_price: Optional[float] = None
+    output_price: Optional[float] = None
     visibility: Optional[str] = None
 
 
@@ -54,6 +60,10 @@ class ModelConfigResponse(BaseModel):
     max_tokens: int
     default_config: Optional[Dict] = None
     temperature: Optional[float] = None
+    currency: Optional[str] = None
+    input_price: Optional[int] = None
+    output_price: Optional[int] = None
+    price_unit: Optional[str] = None
     visibility: str
     status: str
     created_at: datetime

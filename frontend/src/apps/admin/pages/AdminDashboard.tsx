@@ -1,27 +1,31 @@
 import { useState, useEffect } from "react";
-import { Activity, Users, Database, MessageSquare, AlertTriangle } from "lucide-react";
+import { Activity, Users, Database, MessageSquare, AlertTriangle, Loader2 } from "lucide-react";
 import { StatCard } from "@/shared/components/StatCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader } from "@/shared/components/SectionHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { collectApi, modelApi, notificationApi, userApi } from "../../../lib/api";
-import type { Notification as NotificationType, User } from "../../../lib/types";
+import type { ModelUsageRankingItem, Notification as NotificationType, User } from "../../../lib/types";
 
 export function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
   const [stats, setStats] = useState({ users: 0, notifications: 0, collected: 0, models: 0 });
+  const [modelRanking, setModelRanking] = useState<ModelUsageRankingItem[]>([]);
+  const [rankingLoading, setRankingLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   async function fetchDashboardData() {
     setIsLoading(true);
+    setRankingLoading(true);
     try {
-      const [userResult, notifResult, collectResult, modelResult] = await Promise.all([
+      const [userResult, notifResult, collectResult, modelResult, rankingResult] = await Promise.all([
         userApi.getList({ page: 1, page_size: 5 }),
         notificationApi.getList({ page: 1, page_size: 3 }),
         collectApi.getItems({ page: 1, page_size: 1 }),
-        modelApi.getList({ page: 1, page_size: 1 })
+        modelApi.getList({ page: 1, page_size: 1 }),
+        modelApi.getUsageRanking(5)
       ]);
 
       const userList = userResult.items || [];
@@ -35,12 +39,15 @@ export function AdminDashboard() {
         collected: collectResult.total,
         models: modelResult.total
       });
+      setModelRanking(rankingResult || []);
     } catch {
       setUsers([]);
       setNotifications([]);
       setStats({ users: 0, notifications: 0, collected: 0, models: 0 });
+      setModelRanking([]);
     } finally {
       setIsLoading(false);
+      setRankingLoading(false);
     }
   }
 
@@ -72,12 +79,17 @@ export function AdminDashboard() {
     { date: "周五", collected: 1900 },
   ];
 
-  const modelCallData = [
-    { name: "GPT-4", calls: 8540, cost: 1280 },
-    { name: "Claude 3", calls: 5230, cost: 890 },
-    { name: "文心一言", calls: 3890, cost: 450 },
-    { name: "讯飞星火", calls: 2020, cost: 320 },
-  ];
+  const getCurrencySymbol = (currency?: string) => {
+    switch (currency) {
+      case "USD": return "$";
+      case "EUR": return "€";
+      case "JPY": return "¥";
+      case "KRW": return "₩";
+      default: return "¥";
+    }
+  };
+
+  const displayRanking = modelRanking.length > 0 ? modelRanking : [];
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
@@ -198,18 +210,35 @@ export function AdminDashboard() {
         <Card>
           <CardContent className="p-4">
             <SectionHeader title="模型调用排行" />
-            <div className="space-y-3">
-              {modelCallData.slice(0, 4).map((model, i) => (
-                <div key={model.name} className="flex items-center gap-3">
-                  <span className="w-5 h-5 rounded-full bg-muted text-xs flex items-center justify-center text-muted-foreground">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground truncate">{model.name}</p>
-                    <p className="text-xs text-muted-foreground">{model.calls.toLocaleString()} 次调用</p>
+            {rankingLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : displayRanking.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8 text-sm">暂无模型调用数据</div>
+            ) : (
+              <div className="space-y-3">
+                {displayRanking.slice(0, 5).map((model, i) => (
+                  <div key={model.model_id} className="flex items-center gap-3">
+                    <span className="w-5 h-5 rounded-full bg-muted text-xs flex items-center justify-center text-muted-foreground">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground truncate">{model.name}</p>
+                      <p className="text-xs text-muted-foreground">{model.calls.toLocaleString()} 次调用</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-mono text-muted-foreground">
+                        {getCurrencySymbol(model.currency)}{model.cost.toFixed ? model.cost.toFixed(4) : model.cost}
+                      </span>
+                      {model.input_price !== undefined && model.output_price !== undefined && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {getCurrencySymbol(model.currency)}{Number(model.input_price).toFixed(4)} / {getCurrencySymbol(model.currency)}{Number(model.output_price).toFixed(4)}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-xs font-mono text-muted-foreground">¥{model.cost}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
