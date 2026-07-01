@@ -51,6 +51,7 @@ const menuGroups = [
       { key: "agents" as AdminPage, label: "数字员工", icon: Workflow },
       { key: "workflows" as AdminPage, label: "工作流管理", icon: Workflow },
       { key: "knowledge" as AdminPage, label: "知识库管理", icon: BookOpen },
+      { key: "chroma-configs" as AdminPage, label: "Chroma配置", icon: Database },
       { key: "query" as AdminPage, label: "智能问数", icon: Search },
     ]
   },

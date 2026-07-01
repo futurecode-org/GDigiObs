@@ -14,6 +14,7 @@ import { AgentsPage } from "./pages/AgentsPage"
 import { WorkflowPage } from "./pages/WorkflowPage"
 import { TasksPage } from "./pages/TasksPage"
 import { NotificationsPage } from "./pages/NotificationsPage"
+import { DifyProviderPage } from "./pages/DifyProviderPage"
 import { SettingsPage } from "./pages/SettingsPage"
 
 const pageTitles: Record<UserPage, string> = {
@@ -30,6 +31,7 @@ const pageTitles: Record<UserPage, string> = {
   tasks: "任务中心",
   notifications: "通知中心",
   settings: "设置",
+  "dify-providers": "Dify Provider",
 }
 
 interface UserAppProps {
@@ -66,6 +68,7 @@ export function UserApp({ onSwitch }: UserAppProps) {
       case "tasks": return <TasksPage />
       case "notifications": return <NotificationsPage />
       case "settings": return <SettingsPage />
+      case "dify-providers": return <DifyProviderPage />
       default: return <div className="p-6 text-muted-foreground">页面开发中</div>
     }
   }

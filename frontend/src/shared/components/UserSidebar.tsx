@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, MessageSquare, Users, Search, History,
   BookOpen, Wand2, Store, Bot, Workflow, ListChecks,
-  Bell, Settings, ChevronLeft, ChevronRight
+  Bell, Settings, ChevronLeft, ChevronRight, Globe
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { UserPage } from "@/lib/types"
@@ -33,6 +33,7 @@ const menuGroups = [
       { key: "query" as UserPage, label: "智能问数", icon: Search },
       { key: "query-history" as UserPage, label: "问数历史", icon: History },
       { key: "knowledge" as UserPage, label: "知识库", icon: BookOpen },
+      { key: "dify-providers" as UserPage, label: "Dify Provider", icon: Globe },
       { key: "skills" as UserPage, label: "我的技能", icon: Wand2 },
       { key: "skill-market" as UserPage, label: "技能市场", icon: Store },
     ]
