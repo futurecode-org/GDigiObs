@@ -295,10 +295,11 @@ def get_chat_messages_for_audit(
 
 def get_conversation_messages(db: Session, conversation_id: int, page: int = 1,
                               page_size: int = 50) -> List[Message]:
-    """获取会话消息列表"""
+    """获取会话消息列表（被拦截的消息对普通用户不可见）"""
     messages = db.query(Message).filter(
         Message.conversation_id == conversation_id,
-        Message.recalled_at == None
+        Message.recalled_at == None,
+        Message.audit_status != "blocked"
     ).order_by(desc(Message.created_at)).offset((page - 1) * page_size).limit(page_size).all()
     return messages
 
