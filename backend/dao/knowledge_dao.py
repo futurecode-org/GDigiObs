@@ -8,32 +8,60 @@ from model.knowledge import KnowledgeBase, KnowledgeFile, KnowledgeChunk
 from model.user import User
 
 
+def get_knowledge_bases_by_dify_provider(db: Session, provider_id: int) -> List[KnowledgeBase]:
+    """获取使用指定 Dify Provider 的知识库列表（仅未删除的）"""
+    return db.query(KnowledgeBase).filter(
+        KnowledgeBase.dify_provider_id == provider_id,
+        KnowledgeBase.deleted_at == None
+    ).all()
+
+
 def get_knowledge_bases(db: Session, tenant_id: int, user_id: int = None,
-                        kb_type: str = None, page: int = 1, page_size: int = 20) -> List[KnowledgeBase]:
-    """获取知识库列表"""
+                        kb_type: str = None, provider_type: str = None, page: int = 1, page_size: int = 20,
+                        is_admin: bool = False) -> List[KnowledgeBase]:
+    """获取知识库列表（带权限过滤）"""
     query = db.query(KnowledgeBase).filter(
         KnowledgeBase.tenant_id == tenant_id,
         KnowledgeBase.deleted_at == None
     )
     
-    if user_id:
-        query = query.filter(KnowledgeBase.owner_id == user_id)
+    if not is_admin and user_id:
+        # 非管理员只能看到：自己的个人库、群库（需额外检查群成员）、租户库、公开库
+        query = query.filter(
+            or_(
+                KnowledgeBase.owner_id == user_id,
+                KnowledgeBase.type == "tenant",
+                KnowledgeBase.type == "public",
+                KnowledgeBase.is_public == True
+            )
+        )
     
     if kb_type:
         query = query.filter(KnowledgeBase.type == kb_type)
     
+    if provider_type:
+        query = query.filter(KnowledgeBase.provider_type == provider_type)
+    
     return query.order_by(desc(KnowledgeBase.created_at)).offset((page - 1) * page_size).limit(page_size).all()
 
 
-def count_knowledge_bases(db: Session, tenant_id: int, user_id: int = None) -> int:
+def count_knowledge_bases(db: Session, tenant_id: int, user_id: int = None,
+                          is_admin: bool = False) -> int:
     """统计知识库数量"""
     query = db.query(KnowledgeBase).filter(
         KnowledgeBase.tenant_id == tenant_id,
         KnowledgeBase.deleted_at == None
     )
     
-    if user_id:
-        query = query.filter(KnowledgeBase.owner_id == user_id)
+    if not is_admin and user_id:
+        query = query.filter(
+            or_(
+                KnowledgeBase.owner_id == user_id,
+                KnowledgeBase.type == "tenant",
+                KnowledgeBase.type == "public",
+                KnowledgeBase.is_public == True
+            )
+        )
     
     return query.count()
 
@@ -105,12 +133,17 @@ def get_knowledge_file_by_id(db: Session, file_id: int) -> Optional[KnowledgeFil
     return db.query(KnowledgeFile).filter(KnowledgeFile.id == file_id).first()
 
 
-def create_knowledge_file(db: Session, tenant_id: int, kb_id: int, file_id: int) -> KnowledgeFile:
+def create_knowledge_file(db: Session, tenant_id: int, kb_id: int, file_id: int,
+                          original_filename: str = None, file_size: int = None,
+                          word_count: int = None) -> KnowledgeFile:
     """创建知识文件"""
     kb_file = KnowledgeFile(
         tenant_id=tenant_id,
         kb_id=kb_id,
-        file_id=file_id
+        file_id=file_id,
+        original_filename=original_filename,
+        file_size=file_size,
+        word_count=word_count
     )
     db.add(kb_file)
     db.commit()
@@ -118,15 +151,20 @@ def create_knowledge_file(db: Session, tenant_id: int, kb_id: int, file_id: int)
 
 
 def update_knowledge_file_status(db: Session, file_id: int, status: str, 
-                                 error_message: str = None) -> bool:
+                                 error_message: str = None, chunk_count: int = None,
+                                 dify_document_id: str = None) -> bool:
     """更新知识文件状态"""
     kb_file = get_knowledge_file_by_id(db, file_id)
     if not kb_file:
         return False
     
     kb_file.parse_status = status
-    if error_message:
+    if error_message is not None:
         kb_file.error_message = error_message
+    if chunk_count is not None:
+        kb_file.chunk_count = chunk_count
+    if dify_document_id is not None:
+        kb_file.dify_document_id = dify_document_id
     
     db.commit()
     return True
@@ -163,7 +201,8 @@ def count_knowledge_chunks(db: Session, kb_id: int) -> int:
 
 
 def create_knowledge_chunk(db: Session, tenant_id: int, kb_id: int, file_id: int,
-                           chunk_index: int, content: str, token_count: int = 0) -> KnowledgeChunk:
+                           chunk_index: int, content: str, token_count: int = 0,
+                           chroma_doc_id: str = None) -> KnowledgeChunk:
     """创建知识分片"""
     chunk = KnowledgeChunk(
         tenant_id=tenant_id,
@@ -171,7 +210,8 @@ def create_knowledge_chunk(db: Session, tenant_id: int, kb_id: int, file_id: int
         file_id=file_id,
         chunk_index=chunk_index,
         content=content,
-        token_count=token_count
+        token_count=token_count,
+        chroma_doc_id=chroma_doc_id
     )
     db.add(chunk)
     db.flush()
@@ -204,3 +244,44 @@ def search_chunks_by_embedding(db: Session, kb_id: int, embedding: List[float],
     
     # 简化：返回前top_k个分片
     return chunks[:top_k]
+
+
+# 检索日志管理
+def create_retrieval_log(db: Session, tenant_id: int, kb_id: int, user_id: int,
+                        query: str, retrieval_type: str, results_count: int = 0,
+                        top_results: Dict = None, latency_ms: int = None,
+                        status: str = "success", error_message: str = None):
+    """创建检索日志"""
+    from model.kb_retrieval_log import KBRetrievalLog
+    
+    log = KBRetrievalLog(
+        tenant_id=tenant_id,
+        kb_id=kb_id,
+        user_id=user_id,
+        query=query,
+        retrieval_type=retrieval_type,
+        results_count=results_count,
+        top_results=top_results,
+        latency_ms=latency_ms,
+        status=status,
+        error_message=error_message
+    )
+    db.add(log)
+    db.commit()
+    return log
+
+
+def get_retrieval_logs(db: Session, kb_id: int, page: int = 1, page_size: int = 50) -> List:
+    """获取检索日志列表"""
+    from model.kb_retrieval_log import KBRetrievalLog
+    
+    return db.query(KBRetrievalLog).filter(
+        KBRetrievalLog.kb_id == kb_id
+    ).order_by(desc(KBRetrievalLog.created_at)).offset((page - 1) * page_size).limit(page_size).all()
+
+
+def count_retrieval_logs(db: Session, kb_id: int) -> int:
+    """统计检索日志数量"""
+    from model.kb_retrieval_log import KBRetrievalLog
+    
+    return db.query(KBRetrievalLog).filter(KBRetrievalLog.kb_id == kb_id).count()

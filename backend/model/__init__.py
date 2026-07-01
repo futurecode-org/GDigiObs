@@ -25,6 +25,11 @@ from model.collect import CollectPlatform, CollectTask, CollectedItem, CollectLo
 
 # 知识库模型
 from model.knowledge import KnowledgeBase, KnowledgeFile, KnowledgeChunk
+from model.chroma_config import ChromaConfig
+from model.kb_retrieval_log import KBRetrievalLog
+
+# Dify 模型
+from model.dify import DifyProvider, DifyApp, DifyCallLog
 
 # AI能力模型
 from model.model_config import ModelConfig
@@ -63,6 +68,10 @@ __all__ = [
     
     # 知识库模型
     "KnowledgeBase", "KnowledgeFile", "KnowledgeChunk",
+    "ChromaConfig", "KBRetrievalLog",
+    
+    # Dify 模型
+    "DifyProvider", "DifyApp", "DifyCallLog",
     
     # AI能力模型
     "ModelConfig", "Skill",
