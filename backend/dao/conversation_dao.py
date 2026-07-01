@@ -210,7 +210,90 @@ def update_message_audit_result(db: Session, message_id: int, audit_status: str,
     return True
 
 
-def get_conversation_messages(db: Session, conversation_id: int, page: int = 1, 
+def update_message_ai_detection_result(
+    db: Session, message_id: int,
+    ai_risk_level: str, ai_risk_tags: list,
+    ai_model_id: int = None, ai_reason: str = None,
+    audit_status: str = None, risk_level: str = None, risk_tags: list = None
+):
+    """更新消息 AI 检测结果，并同步最终风险等级"""
+    message = db.query(Message).filter(Message.id == message_id).first()
+    if not message:
+        return False
+
+    from datetime import datetime
+    message.ai_risk_level = ai_risk_level
+    message.ai_risk_tags = ai_risk_tags or []
+    message.ai_detected_at = datetime.now()
+    message.ai_model_id = ai_model_id
+    message.ai_reason = ai_reason
+
+    if audit_status:
+        message.audit_status = audit_status
+    if risk_level:
+        message.risk_level = risk_level
+    if risk_tags is not None:
+        message.risk_tags = risk_tags
+
+    db.commit()
+    return True
+
+
+def get_text_messages_for_ai_detection(
+    db: Session, limit: int = 100, minutes: int = None, only_unchecked: bool = True
+) -> List[Message]:
+    """获取待 AI 检测的文本消息"""
+    from datetime import datetime, timedelta
+    query = db.query(Message).filter(
+        Message.message_type == "text",
+        Message.recalled_at == None
+    )
+    if only_unchecked:
+        query = query.filter(Message.ai_detected_at == None)
+    if minutes:
+        since = datetime.now() - timedelta(minutes=minutes)
+        query = query.filter(Message.created_at >= since)
+
+    return query.order_by(desc(Message.created_at)).limit(limit).all()
+
+
+def count_messages_for_ai_detection(db: Session, only_unchecked: bool = True, minutes: int = None) -> int:
+    """统计待 AI 检测的文本消息数量"""
+    from datetime import datetime, timedelta
+    query = db.query(Message).filter(
+        Message.message_type == "text",
+        Message.recalled_at == None
+    )
+    if only_unchecked:
+        query = query.filter(Message.ai_detected_at == None)
+    if minutes:
+        since = datetime.now() - timedelta(minutes=minutes)
+        query = query.filter(Message.created_at >= since)
+    return query.count()
+
+
+def get_chat_messages_for_audit(
+    db: Session, tenant_id: int = None, audit_status: str = None,
+    risk_level: str = None, keyword: str = None,
+    page: int = 1, page_size: int = 20
+):
+    """获取聊天审计消息列表"""
+    query = db.query(Message).filter(Message.message_type == "text")
+    if tenant_id:
+        query = query.filter(Message.tenant_id == tenant_id)
+    if audit_status:
+        query = query.filter(Message.audit_status == audit_status)
+    if risk_level:
+        query = query.filter(Message.risk_level == risk_level)
+    if keyword:
+        query = query.filter(Message.content.contains(keyword))
+
+    total = query.count()
+    messages = query.order_by(desc(Message.created_at)).offset((page - 1) * page_size).limit(page_size).all()
+    return messages, total
+
+
+def get_conversation_messages(db: Session, conversation_id: int, page: int = 1,
                               page_size: int = 50) -> List[Message]:
     """获取会话消息列表"""
     messages = db.query(Message).filter(
