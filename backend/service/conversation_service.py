@@ -2,6 +2,7 @@
 import logging
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
+from datetime import datetime
 
 from dao.conversation_dao import (
     get_or_create_direct_conversation, get_user_conversations,
@@ -13,7 +14,8 @@ from dao.conversation_dao import (
 from dao.group_dao import is_group_member_muted, get_group_member
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
-from core.message_auditor import audit_message
+from core.dependencies import RequestContext
+from service.audit_risk_service import audit_message_content, create_message_audit_log, create_message_alert
 from core.ws_manager import broadcast_message_new, broadcast_message_recalled, broadcast_message_read, broadcast_conversation_updated
 from dao.conversation_dao import get_conversation_members
 from model.user import User
@@ -183,6 +185,10 @@ def send_message(db: Session, current_user: User, conversation_id: int,
     if not is_conversation_member(db, conversation_id, current_user.id):
         raise ForbiddenException("无权在此会话发送消息")
     
+    # 全局禁言检查
+    if current_user.muted_until and current_user.muted_until > datetime.now():
+        raise ForbiddenException("您已被全局禁言，无法发送消息")
+    
     # 群聊时检查禁言状态
     if conversation.type == "group" and conversation.group_id:
         if is_group_member_muted(db, conversation.group_id, current_user.id):
@@ -191,18 +197,18 @@ def send_message(db: Session, current_user: User, conversation_id: int,
     # 文本消息审计
     audit_result = None
     if message_type == "text" and content:
-        audit_result = audit_message(content, current_user.id, current_user.tenant_id)
-        
-        if audit_result.audit_action == "block":
-            logger.warning(f"消息被拦截: user_id={current_user.id}, reason={audit_result.blocked_reason}")
-            raise BadRequestException(f"消息内容不符合规范: {audit_result.blocked_reason}")
+        audit_result = audit_message_content(db, content, current_user.tenant_id)
+        if audit_result.action == "block":
+            logger.warning(f"消息被拦截: user_id={current_user.id}, reason={audit_result.reason}")
     
     # 确定审计状态
     audit_status = "passed"
     risk_level = "none"
     risk_tags = []
     if audit_result:
-        if audit_result.audit_action == "review":
+        if audit_result.action == "block":
+            audit_status = "blocked"
+        elif audit_result.action == "review":
             audit_status = "reviewing"
         else:
             audit_status = "passed"
@@ -214,6 +220,17 @@ def send_message(db: Session, current_user: User, conversation_id: int,
         db, current_user.tenant_id, conversation_id, current_user.id,
         message_type, content, file_id, audit_status, risk_level, risk_tags
     )
+    
+    # 记录审计日志，高风险生成告警
+    if audit_result:
+        create_message_audit_log(db, current_user.tenant_id, message, audit_result)
+        if audit_result.action == "block":
+            ctx = RequestContext(
+                user_id=current_user.id,
+                tenant_id=current_user.tenant_id,
+                username=current_user.username or ""
+            )
+            create_message_alert(db, ctx, message, audit_result)
     
     logger.info(f"用户发送消息: user_id={current_user.id}, conversation_id={conversation_id}")
     
@@ -259,7 +276,10 @@ def get_messages(db: Session, current_user: User, conversation_id: int,
             "file_id": msg.file_id,
             "created_at": msg.created_at,
             "recalled_at": msg.recalled_at,
-            "recalled": msg.recalled_at is not None
+            "recalled": msg.recalled_at is not None,
+            "audit_status": msg.audit_status,
+            "risk_level": msg.risk_level,
+            "risk_tags": msg.risk_tags,
         })
     
     return {
