@@ -4,9 +4,9 @@ import { TopBar } from "@/shared/components/TopBar"
 import { AdminSidebar } from "@/shared/components/AdminSidebar"
 import { AdminDashboard } from "./pages/AdminDashboard"
 import { TenantManagement, UserManagement, RoleManagement, GroupManagement, DataCollection, DataClean, DataAnalysis, ModelManagement, OpLogs, NotifySettings, PlatformConfig, AdminNotifications } from "./pages/PlaceholderPages"
-import { OrgStructure, Permissions, DataAudit, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, ChatAudit, AuditLogs, ChromaConfigManagement } from "./pages/ConnectedAdminPages"
-import { SensitiveWords } from "./pages/SensitiveWords"
+import { OrgStructure, Permissions, DataAudit, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, AuditLogs, ChromaConfigManagement } from "./pages/ConnectedAdminPages"
 import { ChatAudit } from "./pages/ChatAudit"
+import { SensitiveWords } from "./pages/SensitiveWords"
 import { AlertManagement } from "./pages/AlertManagement"
 
 const pageTitles: Record<AdminPage, string> = {
