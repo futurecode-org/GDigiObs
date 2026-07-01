@@ -108,3 +108,70 @@ class AlertRuleUpdate(BaseModel):
     trigger_condition: Optional[Dict] = None
     channels: Optional[Dict] = None
     enabled: Optional[bool] = None
+
+
+# ==================== AI 检测 ====================
+
+class ChatDetectRequest(BaseModel):
+    """聊天内容 AI 检测请求"""
+    content: str = Field(..., min_length=1, description="要检测的内容")
+    model_id: Optional[int] = Field(None, description="指定模型 ID，为空则使用默认模型")
+
+
+class ChatDetectResponse(BaseModel):
+    """聊天内容 AI 检测结果"""
+    model_id: int
+    model_name: str
+    risk_level: str
+    risk_tags: List[str]
+    reason: str
+    success: bool
+    error: Optional[str] = None
+
+
+class ChatMessageDetectRequest(BaseModel):
+    """单条消息 AI 检测请求"""
+    model_id: Optional[int] = Field(None, description="指定模型 ID，为空则使用默认模型")
+
+
+class ChatDetectBatchRequest(BaseModel):
+    """批量 AI 检测请求"""
+    model_id: Optional[int] = Field(None, description="指定模型 ID，为空则使用默认模型")
+    limit: Optional[int] = Field(50, ge=1, le=200, description="每次扫描最大消息数")
+
+
+class ChatMessageAuditResponse(BaseModel):
+    """聊天审计消息响应"""
+    id: int
+    conversation_id: int
+    sender_id: int
+    sender_name: str
+    content: Optional[str] = None
+    message_type: str
+    audit_status: Optional[str] = None
+    risk_level: Optional[str] = None
+    risk_tags: Optional[List[str]] = None
+    ai_risk_level: Optional[str] = None
+    ai_risk_tags: Optional[List[str]] = None
+    ai_detected_at: Optional[str] = None
+    ai_model_id: Optional[int] = None
+    ai_reason: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class ChatMessageAuditListResponse(BaseModel):
+    """聊天审计消息列表响应"""
+    items: List[ChatMessageAuditResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class ChatDetectBatchResponse(BaseModel):
+    """批量 AI 检测响应"""
+    processed: int
+    failed: int
+    high_risk: int
+    medium_risk: int
+    model_id: int
+    model_name: str

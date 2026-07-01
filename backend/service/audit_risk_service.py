@@ -304,6 +304,11 @@ def get_message_audit_list(db: Session, ctx: RequestContext,
             "risk_level": msg.risk_level,
             "risk_tags": msg.risk_tags or [],
             "risk_categories": [tag.replace("sensitive_", "") for tag in (msg.risk_tags or []) if tag.startswith("sensitive_")],
+            "ai_risk_level": msg.ai_risk_level,
+            "ai_risk_tags": msg.ai_risk_tags or [],
+            "ai_detected_at": msg.ai_detected_at.isoformat() if msg.ai_detected_at else None,
+            "ai_model_id": msg.ai_model_id,
+            "ai_reason": msg.ai_reason,
             "created_at": msg.created_at,
         })
 

@@ -7,7 +7,10 @@ from schema.audit import (
     OperationLogResponse, AuditLogResponse, OperationLogListResponse,
     AskRecordCreate, AskRecordUpdate,
     SensitiveWordCreate, SensitiveWordUpdate, SensitiveWordBatchImport,
-    MessageReviewRequest, AlertRuleUpdate
+    MessageReviewRequest, AlertRuleUpdate,
+    ChatDetectRequest, ChatDetectResponse,
+    ChatMessageDetectRequest, ChatMessageAuditListResponse,
+    ChatDetectBatchRequest, ChatDetectBatchResponse,
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
 from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, require_admin
@@ -24,6 +27,10 @@ from service.audit_risk_service import (
     batch_import_sensitive_words,
     get_alert_records_service, resolve_alert_service,
     get_alert_rules_service, update_alert_rule_service
+)
+from service.chat_ai_detection_service import (
+    detect_chat_content_service, detect_message_service,
+    detect_recent_messages_service, get_chat_messages_for_audit_service
 )
 
 from model.user import User
@@ -51,6 +58,71 @@ def list_operation_logs(
         page_size=result["page_size"]
     )
     return PaginatedResponse.success(data=paginated)
+
+
+# 聊天审计消息
+@audit_router.get("/chat-messages", summary="获取聊天审计消息列表")
+def list_chat_messages(
+    audit_status: str = None,
+    risk_level: str = None,
+    keyword: str = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """获取聊天审计消息列表"""
+    result = get_chat_messages_for_audit_service(
+        db, ctx, audit_status=audit_status, risk_level=risk_level,
+        keyword=keyword, page=page, page_size=page_size
+    )
+    paginated = PaginatedData(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"]
+    )
+    return PaginatedResponse.success(data=paginated)
+
+
+@audit_router.post("/chat/detect", summary="AI 检测聊天内容")
+async def detect_chat_content_endpoint(
+    data: ChatDetectRequest,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_permission("audit:chat_detect")
+):
+    """对任意聊天内容进行 AI 风险检测（不持久化）"""
+    result = await detect_chat_content_service(
+        db, data.content, model_id=data.model_id, tenant_id=ctx.tenant_id
+    )
+    return ApiResponse.success(data=result)
+
+
+@audit_router.post("/chat-messages/{message_id}/detect", summary="AI 检测单条消息")
+async def detect_chat_message_endpoint(
+    message_id: int,
+    data: ChatMessageDetectRequest = ChatMessageDetectRequest(),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_permission("audit:chat_detect")
+):
+    """对指定消息进行 AI 风险检测并持久化结果"""
+    result = await detect_message_service(
+        db, message_id, model_id=data.model_id, tenant_id=ctx.tenant_id
+    )
+    return ApiResponse.success(data=result)
+
+
+@audit_router.post("/chat/detect-batch", summary="批量 AI 检测近期消息")
+async def detect_chat_batch_endpoint(
+    data: ChatDetectBatchRequest = ChatDetectBatchRequest(),
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_permission("audit:chat_detect")
+):
+    """批量检测近期未 AI 检测的文本消息"""
+    result = await detect_recent_messages_service(
+        db, limit=data.limit, model_id=data.model_id, only_unchecked=True
+    )
+    return ApiResponse.success(data=result)
 
 
 # 审计日志
