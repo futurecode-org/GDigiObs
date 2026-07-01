@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import type { ReactNode } from "react"
-import { Bot, ClipboardCheck, Database, FileQuestion, KeyRound, Loader2, MessageSquareWarning, Network, Search, ShieldAlert, Sparkles, Workflow } from "lucide-react"
+import { Bot, ClipboardCheck, Database, FileQuestion, KeyRound, Loader2, Network, Search, ShieldAlert, Sparkles, Workflow } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -517,10 +517,6 @@ export function Permissions() {
 
 export function DataAudit() {
   return <AuditLogPage title="数据审计" auditType="data" icon={<ClipboardCheck className="size-5" />} />
-}
-
-export function ChatAudit() {
-  return <AuditLogPage title="聊天审计" auditType="message" icon={<MessageSquareWarning className="size-5" />} />
 }
 
 export function AuditLogs() {
