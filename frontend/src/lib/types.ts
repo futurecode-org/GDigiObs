@@ -647,6 +647,65 @@ export interface AuditLog {
   created_at: string;
 }
 
+export interface MessageAuditItem {
+  id: number;
+  tenant_id?: number;
+  conversation_id: number;
+  conversation_type?: "direct" | "group";
+  sender_id: number;
+  sender_name: string;
+  message_type: string;
+  content?: string;
+  audit_status: "passed" | "blocked" | "reviewing";
+  risk_level: "none" | "low" | "medium" | "high";
+  risk_tags?: string[];
+  risk_categories?: string[];
+  created_at: string;
+}
+
+export interface SensitiveWord {
+  id: number;
+  tenant_id?: number;
+  scope: "platform" | "tenant";
+  word: string;
+  category: string;
+  category_label?: string;
+  risk_level: "low" | "medium" | "high";
+  is_enabled: boolean;
+  is_regex: boolean;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertRecord {
+  id: number;
+  tenant_id?: number;
+  alert_type: string;
+  source_type?: string;
+  source_id?: number;
+  title: string;
+  content?: string;
+  risk_level?: string;
+  status: "unresolved" | "resolved" | "ignored";
+  notified_channels?: Record<string, boolean>;
+  resolved_by_name?: string;
+  resolved_at?: string;
+  created_at: string;
+}
+
+export interface AlertRule {
+  id: number;
+  tenant_id?: number;
+  scope: "platform" | "tenant";
+  rule_name: string;
+  alert_type: string;
+  trigger_condition?: Record<string, unknown>;
+  channels?: Record<string, boolean>;
+  enabled: boolean;
+  created_at: string;
+}
+
 export interface DifyProvider {
   id: number;
   name: string;
@@ -738,7 +797,7 @@ export type UserPage =
   | "settings"
   | "dify-providers";
 
-export type AdminPage = 
+export type AdminPage =
   | "dashboard"
   | "tenants"
   | "org"
@@ -759,6 +818,7 @@ export type AdminPage =
   | "query"
   | "chat-audit"
   | "sensitive"
+  | "alert-management"
   | "op-logs"
   | "audit-logs"
   | "notify-settings"

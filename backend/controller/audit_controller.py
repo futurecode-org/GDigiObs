@@ -5,14 +5,25 @@ from sqlalchemy.orm import Session
 from database.session import get_db
 from schema.audit import (
     OperationLogResponse, AuditLogResponse, OperationLogListResponse,
-    AskRecordCreate, AskRecordUpdate
+    AskRecordCreate, AskRecordUpdate,
+    SensitiveWordCreate, SensitiveWordUpdate, SensitiveWordBatchImport,
+    MessageReviewRequest, AlertRuleUpdate
 )
 from core.response import ApiResponse, PaginatedResponse, PaginatedData
-from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, RequestContext
+from core.dependencies import get_current_user, require_permission, get_request_context, RequestContext, require_admin
 from service.audit_service import (
     get_operation_logs_service, get_audit_logs_service,
     get_ask_records_service, get_ask_record_detail_service,
     create_ask_record_service, update_ask_record_service, save_ask_record_service
+)
+from service.audit_risk_service import (
+    get_message_audit_list, get_message_audit_detail, get_message_context,
+    review_message, trigger_message_alert,
+    get_sensitive_words_service, create_sensitive_word_service,
+    update_sensitive_word_service, delete_sensitive_word_service,
+    batch_import_sensitive_words,
+    get_alert_records_service, resolve_alert_service,
+    get_alert_rules_service, update_alert_rule_service
 )
 
 from model.user import User
@@ -61,6 +72,223 @@ def list_audit_logs(
         page_size=result["page_size"]
     )
     return PaginatedResponse.success(data=paginated)
+
+
+# ==================== 聊天消息审计 ====================
+
+@audit_router.get("/messages", summary="聊天消息审计列表")
+def list_message_audits(
+    risk_level: str = None,
+    risk_category: str = None,
+    audit_status: str = None,
+    keyword: str = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """获取聊天消息审计列表"""
+    result = get_message_audit_list(
+        db, ctx, risk_level=risk_level, risk_category=risk_category,
+        audit_status=audit_status, keyword=keyword, page=page, page_size=page_size
+    )
+    paginated = PaginatedData(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"]
+    )
+    return PaginatedResponse.success(data=paginated)
+
+
+@audit_router.get("/messages/{message_id}", summary="消息审计详情")
+def get_message_audit(
+    message_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """获取单条消息审计详情"""
+    result = get_message_audit_detail(db, ctx, message_id)
+    return ApiResponse.success(data=result)
+
+
+@audit_router.get("/messages/{message_id}/context", summary="消息上下文")
+def get_message_audit_context(
+    message_id: int,
+    limit: int = 5,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """查看消息上下文（前后各N条）"""
+    result = get_message_context(db, ctx, message_id, limit=limit)
+    return ApiResponse.success(data=result)
+
+
+@audit_router.post("/messages/{message_id}/review", summary="人工复核消息")
+def review_message_audit(
+    message_id: int,
+    data: MessageReviewRequest,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """人工复核消息审计结果"""
+    result = review_message(
+        db, ctx, message_id,
+        audit_status=data.audit_status,
+        risk_level=data.risk_level,
+        risk_tags=data.risk_tags
+    )
+    return ApiResponse.success(data=result)
+
+
+@audit_router.post("/messages/{message_id}/alert", summary="手动触发告警")
+def trigger_message_audit_alert(
+    message_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """对指定消息手动触发告警"""
+    result = trigger_message_alert(db, ctx, message_id)
+    return ApiResponse.success(data=result)
+
+
+# ==================== 敏感词库 ====================
+
+@audit_router.get("/sensitive-words", summary="敏感词列表")
+def list_sensitive_words(
+    scope: str = None,
+    category: str = None,
+    risk_level: str = None,
+    enabled: bool = None,
+    keyword: str = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """获取敏感词库列表"""
+    result = get_sensitive_words_service(
+        db, ctx, scope=scope, category=category, risk_level=risk_level,
+        enabled=enabled, keyword=keyword, page=page, page_size=page_size
+    )
+    paginated = PaginatedData(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"]
+    )
+    return PaginatedResponse.success(data=paginated)
+
+
+@audit_router.post("/sensitive-words", summary="新增敏感词")
+def create_sensitive_word_endpoint(
+    data: SensitiveWordCreate,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """新增自定义敏感词"""
+    result = create_sensitive_word_service(db, ctx, data.model_dump())
+    return ApiResponse.success(data=result)
+
+
+@audit_router.post("/sensitive-words/batch", summary="批量导入敏感词")
+def batch_import_sensitive_words_endpoint(
+    data: SensitiveWordBatchImport,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """批量导入敏感词"""
+    result = batch_import_sensitive_words(
+        db, ctx, data.words, category=data.category,
+        risk_level=data.risk_level, scope=data.scope
+    )
+    return ApiResponse.success(data=result)
+
+
+@audit_router.put("/sensitive-words/{word_id}", summary="编辑敏感词")
+def update_sensitive_word_endpoint(
+    word_id: int,
+    data: SensitiveWordUpdate,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """编辑敏感词"""
+    result = update_sensitive_word_service(db, ctx, word_id, data.model_dump(exclude_unset=True))
+    return ApiResponse.success(data=result)
+
+
+@audit_router.delete("/sensitive-words/{word_id}", summary="删除敏感词")
+def delete_sensitive_word_endpoint(
+    word_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """删除敏感词"""
+    result = delete_sensitive_word_service(db, ctx, word_id)
+    return ApiResponse.success(data=result)
+
+
+# ==================== 告警管理 ====================
+
+@audit_router.get("/alerts", summary="告警记录列表")
+def list_alerts(
+    status: str = None,
+    alert_type: str = None,
+    risk_level: str = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """获取告警记录列表"""
+    result = get_alert_records_service(
+        db, ctx, status=status, alert_type=alert_type,
+        risk_level=risk_level, page=page, page_size=page_size
+    )
+    paginated = PaginatedData(
+        items=result["items"],
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"]
+    )
+    return PaginatedResponse.success(data=paginated)
+
+
+@audit_router.post("/alerts/{alert_id}/resolve", summary="处理告警")
+def resolve_alert_endpoint(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """将告警标记为已处理"""
+    result = resolve_alert_service(db, ctx, alert_id)
+    return ApiResponse.success(data=result)
+
+
+@audit_router.get("/alert-rules", summary="告警规则列表")
+def list_alert_rules(
+    alert_type: str = None,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """获取告警规则配置"""
+    result = get_alert_rules_service(db, ctx, alert_type=alert_type)
+    return ApiResponse.success(data=result)
+
+
+@audit_router.put("/alert-rules/{rule_id}", summary="更新告警规则")
+def update_alert_rule_endpoint(
+    rule_id: int,
+    data: AlertRuleUpdate,
+    db: Session = Depends(get_db),
+    ctx: RequestContext = require_admin()
+):
+    """更新告警规则（开关、通知渠道）"""
+    result = update_alert_rule_service(db, ctx, rule_id, data.model_dump(exclude_unset=True))
+    return ApiResponse.success(data=result)
 
 
 # 智能问数

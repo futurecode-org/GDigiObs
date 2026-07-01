@@ -295,11 +295,49 @@ def init_system_roles_and_permissions(db: Session):
         Permission(code="agent:view", name="查看数字员工", type="button"),
         Permission(code="agent:create", name="创建数字员工", type="button"),
         Permission(code="agent:run", name="执行数字员工", type="button"),
+
+        # 审计风控
+        Permission(code="audit:view", name="查看审计记录", type="button"),
+        Permission(code="audit:review", name="人工复核审计", type="button"),
+        Permission(code="audit:sensitive:manage", name="管理敏感词库", type="button"),
+        Permission(code="audit:alert:manage", name="管理告警规则", type="button"),
+        Permission(code="audit:alert:view", name="查看告警记录", type="button"),
+        Permission(code="user:mute", name="禁言用户", type="button"),
     ]
-    
+
     for perm in basic_permissions:
         existing = get_permission_by_code(db, perm.code)
         if not existing:
             create_permission(db, perm)
-    
+
+    # 为系统角色分配权限
+    role_permission_map = {
+        "super_admin": [p.code for p in basic_permissions],
+        "tenant_admin": [
+            "user:view", "user:create", "user:update", "user:disable", "user:ban", "user:assign_role", "user:mute",
+            "role:view", "role:create", "role:update", "role:delete",
+            "ask:query", "ask:view_history", "ask:export",
+            "model:view", "model:create", "model:test",
+            "agent:view", "agent:create", "agent:run",
+            "audit:view", "audit:review", "audit:sensitive:manage", "audit:alert:manage", "audit:alert:view",
+        ],
+        "admin": [
+            "user:view", "user:create", "user:update", "user:disable", "user:ban", "user:mute",
+            "role:view",
+            "ask:query", "ask:view_history",
+            "model:view", "model:test",
+            "agent:view", "agent:run",
+            "audit:view", "audit:review", "audit:sensitive:manage", "audit:alert:manage", "audit:alert:view",
+        ],
+    }
+
+    for role_code, perm_codes in role_permission_map.items():
+        role = get_role_by_code(db, role_code)
+        if not role:
+            continue
+        for perm_code in perm_codes:
+            perm = get_permission_by_code(db, perm_code)
+            if perm:
+                assign_permission_to_role(db, role.id, perm.id)
+
     logger.info("系统角色和权限初始化完成")

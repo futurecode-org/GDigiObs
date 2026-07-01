@@ -16,6 +16,7 @@ from dao.user_dao import (
 )
 from dao.tenant_dao import get_tenant_by_id, create_personal_tenant
 from dao.rbac_dao import get_role_by_code, assign_role_to_user, get_user_roles, get_role_permissions, init_system_roles_and_permissions
+from service.audit_risk_service import init_default_risk_data
 
 from schema.auth import UserRegister, UserLogin, TokenResponse, CurrentUserResponse
 from schema.rbac import MenuNode
@@ -323,6 +324,7 @@ def init_system(db: Session):
     """初始化系统"""
     init_system_roles_and_permissions(db)
     create_default_super_admin(db)
+    init_default_risk_data(db)
     logger.info("系统初始化完成")
 
 

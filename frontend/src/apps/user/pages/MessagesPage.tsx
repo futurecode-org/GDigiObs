@@ -255,14 +255,21 @@ export function MessagesPage() {
 
     try {
       const result = await conversationApi.sendMessage(selectedChat, "text", message);
-      setMessage("");
       const data = result as any;
       const newMsg = data.message || data;
       if (newMsg) {
         setMessages(prev => [newMsg, ...prev]);
+        if (newMsg.audit_status === "blocked") {
+          toast.error("消息因违规被拦截");
+        } else if (newMsg.audit_status === "reviewing") {
+          toast.info("消息已进入人工复核");
+        }
       }
+      setMessage("");
       fetchConversations();
-    } catch {}
+    } catch (error: any) {
+      toast.error(error?.message || "发送失败");
+    }
   };
 
   const handleRecallMessage = async (messageId: number) => {

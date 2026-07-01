@@ -60,6 +60,7 @@ const menuGroups = [
     items: [
       { key: "chat-audit" as AdminPage, label: "聊天审计", icon: MessageSquare },
       { key: "sensitive" as AdminPage, label: "敏感词库", icon: AlertTriangle },
+      { key: "alert-management" as AdminPage, label: "告警管理", icon: Bell },
     ]
   },
   {

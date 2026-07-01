@@ -88,27 +88,29 @@ def send_message_endpoint(
         data.message_type, data.content, data.file_id
     )
     
-    # 通过BackgroundTasks异步推送WebSocket消息
-    recipient_user_ids = result.pop("recipient_user_ids", [])
-    # 构建完整的消息数据用于WebSocket推送
-    message_data = {
-        "id": result["id"],
-        "conversation_id": conversation_id,
-        "sender_id": current_user.id,
-        "sender_name": current_user.nickname or current_user.username,
-        "message_type": result["message_type"],
-        "content": result["content"],
-        "file_id": result.get("file_id"),
-        "created_at": result["created_at"].isoformat() if result["created_at"] else None,
-        "recalled_at": None,
-        "recalled": False
-    }
-    background_tasks.add_task(
-        broadcast_message_new, conversation_id, message_data, recipient_user_ids
-    )
-    background_tasks.add_task(
-        broadcast_conversation_updated, conversation_id, recipient_user_ids
-    )
+    # 被拦截的高风险消息不广播
+    if result.get("audit_status") != "blocked":
+        # 通过BackgroundTasks异步推送WebSocket消息
+        recipient_user_ids = result.pop("recipient_user_ids", [])
+        # 构建完整的消息数据用于WebSocket推送
+        message_data = {
+            "id": result["id"],
+            "conversation_id": conversation_id,
+            "sender_id": current_user.id,
+            "sender_name": current_user.nickname or current_user.username,
+            "message_type": result["message_type"],
+            "content": result["content"],
+            "file_id": result.get("file_id"),
+            "created_at": result["created_at"].isoformat() if result["created_at"] else None,
+            "recalled_at": None,
+            "recalled": False
+        }
+        background_tasks.add_task(
+            broadcast_message_new, conversation_id, message_data, recipient_user_ids
+        )
+        background_tasks.add_task(
+            broadcast_conversation_updated, conversation_id, recipient_user_ids
+        )
     
     return ApiResponse.success(data=result)
 

@@ -1,6 +1,8 @@
 import type {
   Agent,
   AgentRun,
+  AlertRecord,
+  AlertRule,
   AnalysisTask,
   AskRecord,
   CollectedItem,
@@ -21,6 +23,7 @@ import type {
   KnowledgeBase,
   KnowledgeFile,
   Message,
+  MessageAuditItem,
   ModelConfig,
   ModelUsageRankingItem,
   Notification,
@@ -29,6 +32,7 @@ import type {
   PaginatedData,
   Permission,
   Role,
+  SensitiveWord,
   Skill,
   SystemEmailConfig,
   Tenant,
@@ -438,6 +442,12 @@ export const userApi = {
 
   ban: (userId: number): Promise<void> =>
     post(`/users/${userId}/ban`),
+
+  mute: (userId: number, durationMinutes: number): Promise<{ id: number; muted_until?: string }> =>
+    post(`/users/${userId}/mute`, { duration_minutes: durationMinutes }),
+
+  unmute: (userId: number): Promise<{ id: number; muted_until?: string }> =>
+    post(`/users/${userId}/unmute`),
 };
 
 export const agentApi = {
@@ -753,6 +763,66 @@ export const auditApi = {
 
   getAuditLogs: (params?: { audit_type?: string; risk_level?: string; page?: number; page_size?: number }): Promise<PaginatedData<unknown>> =>
     get("/audit/logs", params),
+
+  // 聊天消息审计
+  getMessageAudits: (params?: {
+    risk_level?: string;
+    risk_category?: string;
+    audit_status?: string;
+    keyword?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedData<MessageAuditItem>> =>
+    get("/audit/messages", params),
+
+  getMessageAuditDetail: (messageId: number): Promise<MessageAuditItem> =>
+    get(`/audit/messages/${messageId}`),
+
+  getMessageContext: (messageId: number, limit?: number): Promise<{ current: MessageAuditItem; before: MessageAuditItem[]; after: MessageAuditItem[] }> =>
+    get(`/audit/messages/${messageId}/context`, { limit }),
+
+  reviewMessageAudit: (messageId: number, data: { audit_status: string; risk_level?: string; risk_tags?: string[] }): Promise<MessageAuditItem> =>
+    post(`/audit/messages/${messageId}/review`, data),
+
+  triggerMessageAlert: (messageId: number): Promise<{ alert_id?: number }> =>
+    post(`/audit/messages/${messageId}/alert`),
+
+  // 敏感词库
+  getSensitiveWords: (params?: {
+    scope?: string;
+    category?: string;
+    risk_level?: string;
+    enabled?: boolean;
+    keyword?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<PaginatedData<SensitiveWord>> =>
+    get("/audit/sensitive-words", params),
+
+  createSensitiveWord: (data: Omit<SensitiveWord, "id" | "created_at" | "updated_at" | "scope" | "category_label" | "created_by_name"> & { scope: string }): Promise<SensitiveWord> =>
+    post("/audit/sensitive-words", data),
+
+  updateSensitiveWord: (wordId: number, data: Partial<SensitiveWord> & { scope?: string }): Promise<SensitiveWord> =>
+    put(`/audit/sensitive-words/${wordId}`, data),
+
+  deleteSensitiveWord: (wordId: number): Promise<void> =>
+    del(`/audit/sensitive-words/${wordId}`),
+
+  batchImportSensitiveWords: (data: { words: string; category: string; risk_level: string; scope: string }): Promise<{ created: number }> =>
+    post("/audit/sensitive-words/batch", data),
+
+  // 告警管理
+  getAlerts: (params?: { status?: string; alert_type?: string; risk_level?: string; page?: number; page_size?: number }): Promise<PaginatedData<AlertRecord>> =>
+    get("/audit/alerts", params),
+
+  resolveAlert: (alertId: number): Promise<AlertRecord> =>
+    post(`/audit/alerts/${alertId}/resolve`),
+
+  getAlertRules: (params?: { alert_type?: string }): Promise<AlertRule[]> =>
+    get("/audit/alert-rules", params),
+
+  updateAlertRule: (ruleId: number, data: Partial<AlertRule>): Promise<AlertRule> =>
+    put(`/audit/alert-rules/${ruleId}`, data),
 };
 
 export const modelApi = {
