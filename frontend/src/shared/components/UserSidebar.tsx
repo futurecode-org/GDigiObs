@@ -1,7 +1,8 @@
 import {
   LayoutDashboard, MessageSquare, Users, Search, History,
   BookOpen, Wand2, Store, Bot, Workflow, ListChecks,
-  Bell, Settings, ChevronLeft, ChevronRight, Globe
+  Bell, Settings, ChevronLeft, ChevronRight, Globe,
+  Monitor, Brain
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { UserPage } from "@/lib/types"
@@ -18,6 +19,8 @@ const menuGroups = [
     label: "工作台",
     items: [
       { key: "dashboard" as UserPage, label: "工作台", icon: LayoutDashboard },
+      { key: "big-screen" as UserPage, label: "数智大屏", icon: Monitor },
+      { key: "public-opinion" as UserPage, label: "智能舆情", icon: Brain },
     ]
   },
   {

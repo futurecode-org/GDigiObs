@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import {
   Search, Plus, Upload, Folder, FileText, RefreshCw, Loader2,
   TestTube, MessageSquare, Activity, Clock, Zap, Trash2, X, ChevronLeft, ChevronRight,
-  Edit, Settings, Database, Globe, Cpu, AlertTriangle, Check, Wrench, Trash
+  Edit, AlertTriangle, Check
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -14,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { knowledgeApi, modelApi, difyApi, chromaConfigApi } from "@/lib/api"
 import type {
   KnowledgeBase, KnowledgeFile, KnowledgeChunk, PaginatedData,
@@ -105,6 +104,7 @@ export function KnowledgePage() {
   const [llmModels, setLlmModels] = useState<ModelConfig[]>([])
   const [difyEmbeddingModels, setDifyEmbeddingModels] = useState<DifyModelProvider[]>([])
   const [difyRerankModels, setDifyRerankModels] = useState<DifyModelProvider[]>([])
+  const [, setDifyAvailableModels] = useState<DifyAvailableModel[]>([])
 
   // Create/Edit dialog
   const [dialogOpen, setDialogOpen] = useState(false)

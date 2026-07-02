@@ -91,6 +91,17 @@ async def broadcast_message_recalled(message_id: int, recipient_user_ids: List[i
     )
 
 
+async def broadcast_message_updated(conversation_id: int, message_data: Dict, recipient_user_ids: List[int]):
+    await ws_manager.send_message_to_users(
+        recipient_user_ids,
+        "message.updated",
+        {
+            "conversation_id": conversation_id,
+            "message": message_data
+        }
+    )
+
+
 async def broadcast_message_read(conversation_id: int, user_id: int, recipient_user_ids: List[int]):
     await ws_manager.send_message_to_users(
         recipient_user_ids,

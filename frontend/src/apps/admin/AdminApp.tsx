@@ -3,6 +3,8 @@ import type { AdminPage } from "@/lib/types"
 import { TopBar } from "@/shared/components/TopBar"
 import { AdminSidebar } from "@/shared/components/AdminSidebar"
 import { AdminDashboard } from "./pages/AdminDashboard"
+import { BigScreenPage } from "./pages/BigScreenPage"
+import { PublicOpinionPage } from "./pages/PublicOpinionPage"
 import { TenantManagement, UserManagement, RoleManagement, GroupManagement, DataCollection, DataClean, DataAnalysis, ModelManagement, OpLogs, NotifySettings, PlatformConfig, AdminNotifications } from "./pages/PlaceholderPages"
 import { OrgStructure, Permissions, DataAudit, SkillManagement, AgentManagement, WorkflowManagement, KnowledgeManagement, QueryManagement, AuditLogs, ChromaConfigManagement } from "./pages/ConnectedAdminPages"
 import { ChatAudit } from "./pages/ChatAudit"
@@ -11,6 +13,8 @@ import { AlertManagement } from "./pages/AlertManagement"
 
 const pageTitles: Record<AdminPage, string> = {
   dashboard: "工作台",
+  "big-screen": "数智大屏",
+  "public-opinion": "智能舆情",
   tenants: "租户管理",
   org: "组织架构",
   users: "用户管理",
@@ -49,6 +53,8 @@ export function AdminApp({ onSwitch }: AdminAppProps) {
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <AdminDashboard />
+      case "big-screen": return <BigScreenPage />
+      case "public-opinion": return <PublicOpinionPage />
       case "tenants": return <TenantManagement />
       case "org": return <OrgStructure />
       case "users": return <UserManagement />

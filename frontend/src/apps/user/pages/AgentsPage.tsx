@@ -1,26 +1,38 @@
 import { useState, useEffect, useCallback } from "react"
-import { Search, Plus, Settings, Play, Pause, Loader2, User } from "lucide-react"
+import { Search, Plus, Settings, Play, Pause, Loader2, User, Bot, Send } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { SectionHeader } from "@/shared/components/SectionHeader"
-import { agentApi } from "@/lib/api"
-import type { Agent, PaginatedData } from "@/lib/types"
+import { API_BASE_URL, agentApi, difyApi, getAccessToken } from "@/lib/api"
+import type { Agent, DifyApp, PaginatedData } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { RichMessageContent } from "@/shared/components/RichMessageContent"
 
 export function AgentsPage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedAgent, setSelectedAgent] = useState<number | null>(null)
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [agents, setAgents] = useState<Agent[]>([])
+  const [difyAgents, setDifyAgents] = useState<DifyApp[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [chatInput, setChatInput] = useState("")
+  const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([])
+  const [difyConversationId, setDifyConversationId] = useState<string | undefined>()
+  const [chatLoading, setChatLoading] = useState(false)
 
   const fetchAgents = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await agentApi.getList({ page: 1, page_size: 100 }) as PaginatedData<Agent>
+      const difyResult = await difyApi.getApps({ use_as_digital_employee: true, page: 1, page_size: 100 }) as PaginatedData<DifyApp>
       setAgents(result.items)
-      if (result.items.length > 0 && !selectedAgent) {
-        setSelectedAgent(result.items[0].id)
+      setDifyAgents(difyResult.items)
+      if (!selectedAgent) {
+        if (result.items.length > 0) {
+          setSelectedAgent(`agent:${result.items[0].id}`)
+        } else if (difyResult.items.length > 0) {
+          setSelectedAgent(`dify:${difyResult.items[0].id}`)
+        }
       }
     } catch (error) {
       console.error("获取数字员工列表失败:", error)
@@ -34,10 +46,14 @@ export function AgentsPage() {
     fetchAgents()
   }, [fetchAgents])
 
-  const filteredAgents = agents.filter(a => 
-    a.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-  const currentAgent = agents.find(a => a.id === selectedAgent)
+  const agentItems = [
+    ...agents.map(agent => ({ kind: "agent" as const, id: `agent:${agent.id}`, name: agent.name, status: agent.status, data: agent })),
+    ...difyAgents.map(app => ({ kind: "dify" as const, id: `dify:${app.id}`, name: app.name, status: app.status, data: app })),
+  ]
+  const filteredAgents = agentItems.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const currentItem = agentItems.find(a => a.id === selectedAgent)
+  const currentAgent = currentItem?.kind === "agent" ? currentItem.data : undefined
+  const currentDifyAgent = currentItem?.kind === "dify" ? currentItem.data : undefined
 
   const statusLabels: Record<string, string> = { 
     enabled: "已启用", 
@@ -77,6 +93,72 @@ export function AgentsPage() {
     }
   }
 
+  const handleDifyChat = async () => {
+    if (!currentDifyAgent || !chatInput.trim()) return
+    const question = chatInput.trim()
+    setChatInput("")
+    setChatMessages(prev => [...prev, { role: "user", content: question }])
+    setChatLoading(true)
+    try {
+      if (currentDifyAgent.response_mode === "streaming") {
+        const assistantIndex = chatMessages.length + 1
+        setChatMessages(prev => [...prev, { role: "assistant", content: "" }])
+        const response = await fetch(`${API_BASE_URL}/dify/apps/${currentDifyAgent.id}/stream`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+          },
+          body: JSON.stringify({
+            inputs: {},
+            query: question,
+            conversation_id: difyConversationId,
+            scene: "digital_employee",
+          }),
+        })
+        if (!response.ok || !response.body) throw new Error("stream failed")
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+        let answer = ""
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const events = buffer.split("\n\n")
+          buffer = events.pop() || ""
+          for (const rawEvent of events) {
+            const line = rawEvent.split("\n").find(item => item.startsWith("data:"))
+            if (!line) continue
+            const event = JSON.parse(line.slice(5))
+            if (event.conversation_id) setDifyConversationId(event.conversation_id)
+            const chunk = event.answer || event.data?.answer || ""
+            if (chunk) {
+              answer += chunk
+              setChatMessages(prev => prev.map((msg, index) => index === assistantIndex ? { ...msg, content: answer } : msg))
+            }
+          }
+        }
+        if (!answer) {
+          setChatMessages(prev => prev.map((msg, index) => index === assistantIndex ? { ...msg, content: "Dify 应用未返回内容" } : msg))
+        }
+        return
+      }
+      const result = await difyApi.chatDigitalEmployee(currentDifyAgent.id, {
+        message: question,
+        conversation_id: difyConversationId,
+      })
+      if (result.conversation_id) {
+        setDifyConversationId(result.conversation_id)
+      }
+      setChatMessages(prev => [...prev, { role: "assistant", content: result.answer || "Dify 应用未返回内容" }])
+    } catch (error) {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "调用 Dify 失败，请稍后重试。" }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
   return (
     <div className="h-full flex">
       {/* 左侧数字员工列表 */}
@@ -108,14 +190,18 @@ export function AgentsPage() {
             filteredAgents.map(agent => (
               <button
                 key={agent.id}
-                onClick={() => setSelectedAgent(agent.id)}
+                onClick={() => {
+                  setSelectedAgent(agent.id)
+                  setChatMessages([])
+                  setDifyConversationId(undefined)
+                }}
                 className={cn(
                   "w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors mb-1",
                   selectedAgent === agent.id ? "bg-primary/10" : "hover:bg-muted/50"
                 )}
               >
                 <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", getBgColor(agent.status))}>
-                  <User className="w-5 h-5" />
+                  {agent.kind === "dify" ? <Bot className="w-5 h-5" /> : <User className="w-5 h-5" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -123,7 +209,7 @@ export function AgentsPage() {
                     <span className={cn("w-2 h-2 rounded-full flex-shrink-0", getStatusColor(agent.status))} />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {agent.system_prompt ? "已配置" : "未配置"}
+                    {agent.kind === "dify" ? "Dify App" : ((agent.data as Agent).system_prompt ? "已配置" : "未配置")}
                   </p>
                 </div>
               </button>
@@ -141,6 +227,54 @@ export function AgentsPage() {
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : currentDifyAgent ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">{currentDifyAgent.name}</h2>
+                <div className="flex items-center gap-3 mt-1">
+                  <Badge variant={currentDifyAgent.status === "enabled" ? "secondary" : "outline"}>
+                    Dify 数字员工
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {currentDifyAgent.app_type} · {currentDifyAgent.visibility}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <Card>
+              <CardContent className="p-4">
+                <SectionHeader title="对话" />
+                <div className="h-80 overflow-y-auto rounded-lg border border-border p-3 space-y-3">
+                  {chatMessages.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm text-muted-foreground">开始与数字员工对话</div>
+                  ) : (
+                    chatMessages.map((msg, index) => (
+                      <div key={index} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                        <div className={cn("max-w-[75%] rounded-lg px-3 py-2 text-sm", msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground")}>
+                          {msg.content ? <RichMessageContent content={msg.content} /> : <span className="text-muted-foreground">正在生成...</span>}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {chatLoading && <div className="text-xs text-muted-foreground">正在生成回复...</div>}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleDifyChat()}
+                    placeholder="输入消息..."
+                    className="flex-1 px-3 py-2 bg-muted border border-transparent rounded-lg text-sm focus:outline-none focus:border-primary"
+                  />
+                  <Button size="sm" onClick={handleDifyChat} disabled={chatLoading || !chatInput.trim()}>
+                    {chatLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         ) : currentAgent ? (
           <div className="space-y-4">

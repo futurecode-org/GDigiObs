@@ -8,7 +8,7 @@ from schema.group import (
     GroupCreate, GroupUpdate, GroupResponse, GroupMemberCreate,
     GroupWithMembersResponse, FriendApplicationCreate,
     FriendApplicationResponse, FriendWithUserInfoResponse,
-    GroupAnnouncementCreate, GroupJoinApplicationCreate,
+    GroupAnnouncementCreate, GroupJoinApplicationCreate, GroupDifyAppCreate,
     GroupInvitationCreate, MuteMemberRequest
 )
 from core.response import ApiResponse
@@ -27,7 +27,8 @@ from service.group_service import (
     reject_group_join_application_service, invite_to_group_service,
     get_user_group_invitations_service, accept_group_invitation_service,
     reject_group_invitation_service, mute_group_member_service,
-    unmute_group_member_service
+    unmute_group_member_service, add_group_dify_app_service,
+    remove_group_dify_app_service
 )
 from service.notification_service import send_notification_service
 from dao.user_dao import get_user_by_id
@@ -159,6 +160,40 @@ def add_members(
     """
     add_group_members_service(db, current_user, group_id, data.user_ids)
     return ApiResponse.success(message="成员已添加")
+
+
+@group_router.post("/{group_id}/dify-apps", summary="添加 Dify 数字员工到群聊")
+def add_dify_app_member(
+    group_id: int,
+    data: GroupDifyAppCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    添加已开启“用作数字员工”的 Dify App 到群聊。
+
+    - 只有群主和管理员可添加
+    - 无需入群申请，添加后可在群聊中通过 @名称 调用
+    """
+    result = add_group_dify_app_service(db, current_user, group_id, data.dify_app_id)
+    return ApiResponse.success(message="数字员工已加入群聊", data=result)
+
+
+@group_router.delete("/{group_id}/dify-apps/{dify_app_id}", summary="移除群聊 Dify 数字员工")
+def remove_dify_app_member(
+    group_id: int,
+    dify_app_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    从群聊移除 Dify 数字员工。
+
+    - 只有群主和管理员可移除
+    - 移除后不可再通过 @名称 调用
+    """
+    remove_group_dify_app_service(db, current_user, group_id, dify_app_id)
+    return ApiResponse.success(message="数字员工已移除")
 
 
 @group_router.delete("/{group_id}/members/{user_id}", summary="移除群成员")

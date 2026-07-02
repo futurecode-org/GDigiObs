@@ -19,6 +19,10 @@ from dao.group_dao import (
     get_group_invitation, accept_group_invitation, reject_group_invitation,
     mute_group_member, unmute_group_member, is_group_member_muted
 )
+from dao.dify_dao import (
+    get_dify_app_by_id, add_dify_app_to_group, get_group_dify_app_members,
+    remove_dify_app_from_group
+)
 from model.group import FriendApplication, GroupJoinApplication, GroupInvitation
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
@@ -117,6 +121,21 @@ def get_group_detail(db: Session, current_user: User, group_id: int) -> Dict:
             "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             "muted_until": member.muted_until.isoformat() if member.muted_until else None
         })
+
+    dify_app_members = []
+    for dify_member in get_group_dify_app_members(db, group_id):
+        app = get_dify_app_by_id(db, dify_member.dify_app_id)
+        if app and app.status != "deleted":
+            dify_app_members.append({
+                "id": dify_member.id,
+                "group_id": group_id,
+                "dify_app_id": app.id,
+                "name": app.name,
+                "app_type": app.app_type,
+                "status": app.status,
+                "role": "dify_app",
+                "joined_at": dify_member.created_at.isoformat() if dify_member.created_at else None
+            })
     
     # 获取当前用户角色
     current_member = get_group_member(db, group_id, current_user.id)
@@ -135,9 +154,58 @@ def get_group_detail(db: Session, current_user: User, group_id: int) -> Dict:
         "my_role": role,
         "created_by": group.owner_id,
         "members": member_info,
+        "dify_app_members": dify_app_members,
         "created_at": group.created_at.isoformat() if group.created_at else None,
         "updated_at": group.updated_at.isoformat() if group.updated_at else None
     }
+
+
+def add_group_dify_app_service(db: Session, current_user: User, group_id: int, dify_app_id: int) -> Dict:
+    """添加 Dify 数字员工到群聊，无需申请直接入群。"""
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise NotFoundException("群组不存在")
+
+    current_member = get_group_member(db, group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("无权添加数字员工")
+
+    app = get_dify_app_by_id(db, dify_app_id)
+    if not app or app.status == "deleted":
+        raise NotFoundException("Dify App 不存在")
+    if not app.use_as_digital_employee:
+        raise BadRequestException("该 Dify App 未开启用作数字员工")
+    if app.status != "enabled":
+        raise BadRequestException("该 Dify App 未启用")
+    if app.visibility not in ["public", "platform"] and app.tenant_id != current_user.tenant_id:
+        raise ForbiddenException("无权添加该 Dify App")
+
+    member = add_dify_app_to_group(db, group_id, dify_app_id, current_user.id)
+    logger.info(f"添加 Dify 数字员工到群聊: group_id={group_id}, dify_app_id={dify_app_id}")
+    return {
+        "id": member.id,
+        "group_id": group_id,
+        "dify_app_id": app.id,
+        "name": app.name,
+        "status": app.status
+    }
+
+
+def remove_group_dify_app_service(db: Session, current_user: User, group_id: int, dify_app_id: int):
+    """从群聊移除 Dify 数字员工。"""
+    group = get_group_by_id(db, group_id)
+    if not group:
+        raise NotFoundException("群组不存在")
+
+    current_member = get_group_member(db, group_id, current_user.id)
+    if not current_member or current_member.role not in ["owner", "admin"]:
+        raise ForbiddenException("无权移除数字员工")
+
+    success = remove_dify_app_from_group(db, group_id, dify_app_id)
+    if not success:
+        raise NotFoundException("群内数字员工不存在")
+
+    logger.info(f"移除 Dify 数字员工: group_id={group_id}, dify_app_id={dify_app_id}")
 
 
 def add_group_members_service(db: Session, current_user: User, group_id: int, 

@@ -4,13 +4,11 @@ import {
   FileText, Upload, MessageSquare, Activity, ChevronLeft, ChevronRight,
   TestTube, Zap, FolderOpen, Clock, AlertTriangle
 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog"
@@ -145,7 +143,7 @@ export function KnowledgeManagement() {
   const [chunkDialogOpen, setChunkDialogOpen] = useState(false)
   const [chunks, setChunks] = useState<KnowledgeChunk[]>([])
   const [chunksLoading, setChunksLoading] = useState(false)
-  const [chunkFileId, setChunkFileId] = useState<number | null>(null)
+  const [, setChunkFileId] = useState<number | null>(null)
 
   // Retrieve test dialog
   const [retrieveDialogOpen, setRetrieveDialogOpen] = useState(false)

@@ -20,7 +20,9 @@ export interface DifyModelProvider {
 export interface DifySyncResult {
   synced_count: number;
   total_datasets: number;
-}export interface ApiResponse<T = unknown> {
+}
+
+export interface ApiResponse<T = unknown> {
   code: number;
   message: string;
   data: T;
@@ -87,11 +89,13 @@ export interface Notification {
 export interface Conversation {
   id: number;
   type: "direct" | "group";
+  group_id?: number;
   name?: string;
   unread_count: number;
   message_count?: number;
   last_message?: Message;
   members: ConversationMember[];
+  dify_app_members?: ConversationDifyAppMember[];
   created_at: string;
   updated_at: string;
 }
@@ -105,10 +109,24 @@ export interface ConversationMember {
   role?: string;
 }
 
+export interface ConversationDifyAppMember {
+  id: number;
+  group_id: number;
+  dify_app_id: number;
+  name: string;
+  app_type: string;
+  status: string;
+  role: "dify_app";
+  joined_at?: string;
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
   sender_id: number;
+  sender_type?: "user" | "dify_app" | "system";
+  sender_display_name?: string;
+  dify_app_id?: number;
   sender_name: string;
   message_type: "text" | "image" | "file" | "system";
   content: string;
@@ -227,6 +245,7 @@ export interface Group {
     nickname?: string;
   };
   members: GroupMember[];
+  dify_app_members?: ConversationDifyAppMember[];
   created_at: string;
   updated_at: string;
 }
@@ -809,6 +828,156 @@ export interface SystemEmailConfig {
   updated_at: string;
 }
 
+export type DatabaseType = "mysql" | "sqlite";
+
+export interface DatabaseConfig {
+  database_type: DatabaseType;
+  database_host: string;
+  database_port: number;
+  database_name: string;
+  database_user: string;
+  sqlite_database_path: string;
+  active_database_url: string;
+}
+
+export interface DatabaseConfigUpdate {
+  database_type: DatabaseType;
+  database_host?: string;
+  database_port?: number;
+  database_name?: string;
+  database_user?: string;
+  database_password?: string;
+  sqlite_database_path?: string;
+}
+
+export interface DatabaseConfigSaveResponse {
+  restart_required: boolean;
+  database_type: DatabaseType;
+}
+
+export interface DatabaseConnectionTestResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface DashboardStats {
+  users: number;
+  tenants: number;
+  messages: number;
+  collected: number;
+  cleaned: number;
+  analyzed: number;
+  analysis_tasks: number;
+  ask_records: number;
+  model_calls: number;
+  model_tokens: number;
+  sensitive_messages: number;
+  negative_collected: number;
+  alert_count: number;
+  agent_runs: number;
+  agent_success_rate: number;
+}
+
+export interface StatChange {
+  value: number;
+  direction: "up" | "down";
+}
+
+export interface DashboardStatsResponse {
+  stats: DashboardStats;
+  changes: Record<string, StatChange>;
+}
+
+export interface TrendItem {
+  date: string;
+  messages: number;
+  queries: number;
+  tasks: number;
+  collected: number;
+  cleaned: number;
+  analyzed: number;
+  model_calls: number;
+}
+
+export interface DashboardTrendsResponse {
+  items: TrendItem[];
+  days: number;
+}
+
+export interface SentimentItem {
+  name: string;
+  value: number;
+  color?: string;
+}
+
+export interface DashboardSentimentResponse {
+  collect: SentimentItem[];
+  chat: SentimentItem[];
+}
+
+export interface KeywordItem {
+  name: string;
+  value: number;
+}
+
+export interface DashboardKeywordsResponse {
+  items: KeywordItem[];
+}
+
+export interface DashboardWordCloudResponse {
+  items: KeywordItem[];
+}
+
+export interface GeoCoord {
+  name: string;
+  value: [number, number, number];
+}
+
+export interface GeoLine {
+  from_coord: [number, number];
+  to_coord: [number, number];
+}
+
+export interface DashboardGeoResponse {
+  points: GeoCoord[];
+  lines: GeoLine[];
+  note: string;
+}
+
+export interface RiskOverviewResponse {
+  high_risk_messages: number;
+  medium_risk_messages: number;
+  low_risk_messages: number;
+  negative_collected: number;
+  unresolved_alerts: number;
+  recent_alerts: Array<{
+    id: number;
+    title: string;
+    risk_level?: string;
+    alert_type?: string;
+    created_at?: string;
+  }>;
+}
+
+export interface RiskEvent {
+  level: "high" | "medium" | "low";
+  source: "chat" | "collect";
+  title: string;
+  summary: string;
+  suggestion: string;
+}
+
+export interface PublicOpinionAnalyzeResponse {
+  summary: string;
+  risk_events: RiskEvent[];
+  sentiment_trend: Array<Record<string, unknown>>;
+  keywords: KeywordItem[];
+  suggestions: string[];
+  model_id?: number;
+  model_name?: string;
+  analyzed_at?: string;
+}
+
 export interface DifyProvider {
   id: number;
   name: string;
@@ -831,6 +1000,7 @@ export interface DifyApp {
   output_schema?: unknown;
   default_inputs?: unknown;
   conversation_enabled: boolean;
+  use_as_digital_employee: boolean;
   visibility: string;
   review_status: string;
   status: string;
@@ -838,8 +1008,10 @@ export interface DifyApp {
   updated_at: string;
 }
 
-export type UserPage = 
+export type UserPage =
   | "dashboard"
+  | "big-screen"
+  | "public-opinion"
   | "messages"
   | "contacts"
   | "query"
@@ -856,6 +1028,8 @@ export type UserPage =
 
 export type AdminPage =
   | "dashboard"
+  | "big-screen"
+  | "public-opinion"
   | "tenants"
   | "org"
   | "users"

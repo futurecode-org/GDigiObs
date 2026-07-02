@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { Plus, Trash2, Edit, TestTube, Loader2, X, Check, Server, AppWindow, AlertTriangle } from "lucide-react"
+import { Plus, Trash2, Edit, TestTube, Loader2, X, Check, Server, AppWindow, AlertTriangle, Database } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { difyApi } from "@/lib/api"
-import type { DifyProvider, DifyApp } from "@/lib/types"
+import { difyApi, systemConfigApi } from "@/lib/api"
+import type { DifyProvider, DifyApp, DatabaseType } from "@/lib/types"
 import { toast } from "sonner"
 import { SectionHeader } from "@/shared/components/SectionHeader"
 
@@ -20,10 +20,21 @@ export function PlatformConfig() {
   const [providers, setProviders] = useState<DifyProvider[]>([])
   const [apps, setApps] = useState<DifyApp[]>([])
   const [loading, setLoading] = useState(false)
+  const [databaseLoading, setDatabaseLoading] = useState(false)
   const [providerDialogOpen, setProviderDialogOpen] = useState(false)
   const [appDialogOpen, setAppDialogOpen] = useState(false)
   const [editingProvider, setEditingProvider] = useState<DifyProvider | null>(null)
   const [editingApp, setEditingApp] = useState<DifyApp | null>(null)
+  const [databaseForm, setDatabaseForm] = useState({
+    database_type: "mysql" as DatabaseType,
+    database_host: "",
+    database_port: 3306,
+    database_name: "",
+    database_user: "",
+    database_password: "",
+    sqlite_database_path: "backend/data/gdigiobs.db",
+    active_database_url: "",
+  })
 
   // Provider delete dialog
   const [providerDeleteDialogOpen, setProviderDeleteDialogOpen] = useState(false)
@@ -49,6 +60,7 @@ export function PlatformConfig() {
     visibility: "personal",
     status: "enabled",
     conversation_enabled: true,
+    use_as_digital_employee: false,
   })
 
   const fetchProviders = useCallback(async () => {
@@ -69,10 +81,30 @@ export function PlatformConfig() {
     }
   }, [])
 
+  const fetchDatabaseConfig = useCallback(async () => {
+    try {
+      const config = await systemConfigApi.getDatabaseConfig()
+      setDatabaseForm(prev => ({
+        ...prev,
+        database_type: config.database_type,
+        database_host: config.database_host,
+        database_port: config.database_port,
+        database_name: config.database_name,
+        database_user: config.database_user,
+        database_password: "",
+        sqlite_database_path: config.sqlite_database_path,
+        active_database_url: config.active_database_url,
+      }))
+    } catch (error: any) {
+      toast.error(error.message || "获取数据库配置失败")
+    }
+  }, [])
+
   useEffect(() => {
     fetchProviders()
     fetchApps()
-  }, [fetchProviders, fetchApps])
+    fetchDatabaseConfig()
+  }, [fetchProviders, fetchApps, fetchDatabaseConfig])
 
   const handleOpenProviderCreate = () => {
     setEditingProvider(null)
@@ -159,7 +191,7 @@ export function PlatformConfig() {
 
   const handleOpenAppCreate = () => {
     setEditingApp(null)
-    setAppForm({ name: "", provider_id: providers[0]?.id || 0, app_type: "workflow", api_endpoint: "/workflows/run", response_mode: "blocking", visibility: "personal", status: "enabled", conversation_enabled: true })
+    setAppForm({ name: "", provider_id: providers[0]?.id || 0, app_type: "workflow", api_endpoint: "/workflows/run", response_mode: "blocking", visibility: "personal", status: "enabled", conversation_enabled: true, use_as_digital_employee: false })
     setAppDialogOpen(true)
   }
 
@@ -174,6 +206,7 @@ export function PlatformConfig() {
       visibility: app.visibility,
       status: app.status,
       conversation_enabled: app.conversation_enabled,
+      use_as_digital_employee: app.use_as_digital_employee || false,
     })
     setAppDialogOpen(true)
   }
@@ -220,14 +253,62 @@ export function PlatformConfig() {
     }
   }
 
+  const buildDatabasePayload = () => ({
+    database_type: databaseForm.database_type,
+    database_host: databaseForm.database_host,
+    database_port: Number(databaseForm.database_port),
+    database_name: databaseForm.database_name,
+    database_user: databaseForm.database_user,
+    database_password: databaseForm.database_password || undefined,
+    sqlite_database_path: databaseForm.sqlite_database_path,
+  })
+
+  const handleTestDatabase = async () => {
+    setDatabaseLoading(true)
+    try {
+      const result = await systemConfigApi.testDatabaseConfig(buildDatabasePayload())
+      if (result.success) {
+        toast.success(result.message || "数据库连接成功")
+      } else {
+        toast.error(result.message || "数据库连接失败")
+      }
+    } catch (error: any) {
+      toast.error(error.message || "数据库连接测试失败")
+    } finally {
+      setDatabaseLoading(false)
+    }
+  }
+
+  const handleSaveDatabase = async () => {
+    if (databaseForm.database_type === "mysql" && (!databaseForm.database_host || !databaseForm.database_name || !databaseForm.database_user)) {
+      toast.error("请填写 MySQL 连接信息")
+      return
+    }
+    if (databaseForm.database_type === "sqlite" && !databaseForm.sqlite_database_path) {
+      toast.error("请填写 SQLite 数据库文件路径")
+      return
+    }
+
+    setDatabaseLoading(true)
+    try {
+      const result = await systemConfigApi.updateDatabaseConfig(buildDatabasePayload())
+      toast.success(result.restart_required ? "数据库配置已保存，重启后生效" : "数据库配置已保存")
+      fetchDatabaseConfig()
+    } catch (error: any) {
+      toast.error(error.message || "保存数据库配置失败")
+    } finally {
+      setDatabaseLoading(false)
+    }
+  }
+
   const getProviderName = (id: number) => providers.find(p => p.id === id)?.name || "未知"
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-4">
-      <SectionHeader title="平台配置" subtitle="管理Dify Provider和应用配置" />
+      <SectionHeader title="平台配置" subtitle="管理Dify Provider、应用和数据库连接配置" />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
+        <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="providers" className="gap-2">
             <Server className="w-4 h-4" />
             Dify Provider
@@ -235,6 +316,10 @@ export function PlatformConfig() {
           <TabsTrigger value="apps" className="gap-2">
             <AppWindow className="w-4 h-4" />
             Dify App
+          </TabsTrigger>
+          <TabsTrigger value="database" className="gap-2">
+            <Database className="w-4 h-4" />
+            数据库
           </TabsTrigger>
         </TabsList>
 
@@ -322,6 +407,7 @@ export function PlatformConfig() {
                       <TableHead>名称</TableHead>
                       <TableHead>类型</TableHead>
                       <TableHead>Provider</TableHead>
+                      <TableHead>数字员工</TableHead>
                       <TableHead>状态</TableHead>
                       <TableHead className="text-right">操作</TableHead>
                     </TableRow>
@@ -337,6 +423,11 @@ export function PlatformConfig() {
                           <Badge variant="outline" className="text-xs">{app.app_type}</Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{getProviderName(app.provider_id)}</TableCell>
+                        <TableCell>
+                          <Badge variant={app.use_as_digital_employee ? "secondary" : "outline"} className="text-xs">
+                            {app.use_as_digital_employee ? "是" : "否"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={app.status === "enabled" ? "secondary" : "destructive"} className="text-xs">
                             {app.status === "enabled" ? "启用" : "停用"}
@@ -360,6 +451,81 @@ export function PlatformConfig() {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="database" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">数据库连接设置</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>数据库类型</Label>
+                  <Select
+                    value={databaseForm.database_type}
+                    onValueChange={(value: DatabaseType) => setDatabaseForm(prev => ({ ...prev, database_type: value }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mysql">MySQL</SelectItem>
+                      <SelectItem value="sqlite">SQLite</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>当前连接</Label>
+                  <Input value={databaseForm.active_database_url} readOnly className="font-mono text-xs" />
+                </div>
+              </div>
+
+              {databaseForm.database_type === "mysql" ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>主机 *</Label>
+                    <Input value={databaseForm.database_host} onChange={e => setDatabaseForm(prev => ({ ...prev, database_host: e.target.value }))} placeholder="127.0.0.1" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>端口 *</Label>
+                    <Input type="number" value={databaseForm.database_port} onChange={e => setDatabaseForm(prev => ({ ...prev, database_port: Number(e.target.value) }))} placeholder="3306" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>数据库名 *</Label>
+                    <Input value={databaseForm.database_name} onChange={e => setDatabaseForm(prev => ({ ...prev, database_name: e.target.value }))} placeholder="gdigiobs" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>用户名 *</Label>
+                    <Input value={databaseForm.database_user} onChange={e => setDatabaseForm(prev => ({ ...prev, database_user: e.target.value }))} placeholder="root" />
+                  </div>
+                  <div className="space-y-2 lg:col-span-2">
+                    <Label>密码</Label>
+                    <Input type="password" value={databaseForm.database_password} onChange={e => setDatabaseForm(prev => ({ ...prev, database_password: e.target.value }))} placeholder="留空则不修改当前密码" />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>SQLite 数据库文件 *</Label>
+                  <Input value={databaseForm.sqlite_database_path} onChange={e => setDatabaseForm(prev => ({ ...prev, sqlite_database_path: e.target.value }))} placeholder="backend/data/gdigiobs.db" />
+                </div>
+              )}
+
+              <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <div>保存后会更新服务端 .env 配置，数据库类型切换需要重启后端服务后生效；该操作不会迁移 MySQL 与 SQLite 之间的数据。</div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={handleTestDatabase} disabled={databaseLoading}>
+                  {databaseLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <TestTube className="w-4 h-4 mr-1" />}
+                  测试连接
+                </Button>
+                <Button onClick={handleSaveDatabase} disabled={databaseLoading}>
+                  {databaseLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
+                  保存设置
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -502,6 +668,13 @@ export function PlatformConfig() {
                 <p className="text-xs text-muted-foreground">对话类应用需要维护会话</p>
               </div>
               <Switch checked={appForm.conversation_enabled} onCheckedChange={checked => setAppForm(prev => ({ ...prev, conversation_enabled: checked }))} />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label>用作数字员工</Label>
+                <p className="text-xs text-muted-foreground">开启后显示在数字员工页，可私聊并加入群聊</p>
+              </div>
+              <Switch checked={appForm.use_as_digital_employee} onCheckedChange={checked => setAppForm(prev => ({ ...prev, use_as_digital_employee: checked }))} />
             </div>
           </div>
           <DialogFooter>

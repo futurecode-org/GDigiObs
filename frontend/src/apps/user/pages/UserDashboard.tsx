@@ -5,22 +5,31 @@ import { StatCard } from "@/shared/components/StatCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader } from "@/shared/components/SectionHeader";
-import { askApi, conversationApi, knowledgeApi, skillApi, workflowApi } from "../../../lib/api";
-import type { Conversation, WorkflowRun } from "../../../lib/types";
-import { queryExamples } from "../../../lib/mockData";
+import { askApi, conversationApi, dashboardApi, knowledgeApi, skillApi, workflowApi } from "../../../lib/api";
+import type { Conversation, DashboardSentimentResponse, DashboardStatsResponse, DashboardTrendsResponse, WorkflowRun } from "../../../lib/types";
 
 export function UserDashboard() {
   const [stats, setStats] = useState({ messages: 0, queries: 0, knowledge: 0, skills: 0 });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [tasks, setTasks] = useState<WorkflowRun[]>([]);
+  const [activityData, setActivityData] = useState<DashboardTrendsResponse["items"]>([]);
+  const [sentimentData, setSentimentData] = useState<DashboardSentimentResponse["chat"]>([]);
+  const [queryExamples, setQueryExamples] = useState<string[]>([]);
+  const [changes, setChanges] = useState<Record<string, { value: number; direction: "up" | "down" }>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   async function fetchDashboardData() {
     setIsLoading(true);
     try {
-      const [convResult, taskResult] = await Promise.all([
+      const [convResult, taskResult, askResult, knowledgeResult, skillResult, statsResult, trendsResult, sentimentResult] = await Promise.all([
         conversationApi.getList(),
-        workflowApi.getTasks({ page: 1, page_size: 10 })
+        workflowApi.getTasks({ page: 1, page_size: 10 }),
+        askApi.getList({ page: 1, page_size: 5 }),
+        knowledgeApi.getList({ page: 1, page_size: 1 }),
+        skillApi.getList({ page: 1, page_size: 1 }),
+        dashboardApi.getStats(),
+        dashboardApi.getTrends(7),
+        dashboardApi.getSentiment(),
       ]);
 
       const convList = convResult as Conversation[];
@@ -29,21 +38,31 @@ export function UserDashboard() {
       const taskList = taskResult.items || [];
       setTasks(taskList.filter((t: WorkflowRun) => t.status !== "completed").slice(0, 3));
 
-      const [askResult, knowledgeResult, skillResult] = await Promise.all([
-        askApi.getList({ page: 1, page_size: 1 }),
-        knowledgeApi.getList({ page: 1, page_size: 1 }),
-        skillApi.getList({ page: 1, page_size: 1 }),
-      ]);
       const totalMessages = convList.reduce((sum, c) => sum + (c.message_count || 0), 0);
+      const statsRes = statsResult as DashboardStatsResponse;
       setStats({
         messages: totalMessages,
         queries: askResult.total,
         knowledge: knowledgeResult.total,
         skills: skillResult.total
       });
+      setChanges(statsRes.changes || {});
+
+      const trends = trendsResult as DashboardTrendsResponse;
+      setActivityData(trends.items || []);
+
+      const sentiment = sentimentResult as DashboardSentimentResponse;
+      setSentimentData(sentiment.chat && sentiment.chat.length > 0 ? sentiment.chat : sentiment.collect);
+
+      // 取最近问数记录作为示例
+      setQueryExamples((askResult.items || []).slice(0, 4).map((r) => r.question));
     } catch {
       setConversations([]);
       setTasks([]);
+      setActivityData([]);
+      setSentimentData([]);
+      setQueryExamples([]);
+      setChanges({});
     } finally {
       setIsLoading(false);
     }
@@ -53,34 +72,30 @@ export function UserDashboard() {
     void Promise.resolve().then(fetchDashboardData);
   }, []);
 
-  const activityData = [
-    { date: "周一", messages: 120, queries: 35, tasks: 12 },
-    { date: "周二", messages: 150, queries: 42, tasks: 15 },
-    { date: "周三", messages: 130, queries: 38, tasks: 10 },
-    { date: "周四", messages: 180, queries: 52, tasks: 18 },
-    { date: "周五", messages: 160, queries: 48, tasks: 14 },
-    { date: "周六", messages: 90, queries: 25, tasks: 8 },
-    { date: "周日", messages: 80, queries: 22, tasks: 6 },
-  ];
-
-  const sentimentData = [
-    { name: "正面", value: 55, color: "#10B981" },
-    { name: "中性", value: 30, color: "#6B7280" },
-    { name: "负面", value: 15, color: "#EF4444" },
-  ];
+  const getTrend = (key: string) => {
+    const c = changes[key];
+    return c ? (c.direction === "up" ? c.value : -c.value) : undefined;
+  };
 
   const getConversationName = (conv: Conversation) => {
     if (conv.type === "group" && conv.name) return conv.name;
     return conv.members?.[0]?.nickname || conv.members?.[0]?.username || "未知";
   };
 
+  const weekDayMap = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const formatDateLabel = (dateStr: string) => {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return weekDayMap[d.getDay()];
+  };
+
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="我的消息" value={stats.messages.toString()} icon={MessageSquare} trend={5.2} color="primary" />
-        <StatCard label="智能问数" value={stats.queries.toString()} icon={Search} trend={12.3} color="info" />
-        <StatCard label="知识库检索" value={stats.knowledge.toString()} icon={BookOpen} trend={-3.1} color="purple" />
-        <StatCard label="技能调用" value={stats.skills.toString()} icon={Wand2} trend={8.7} color="success" />
+        <StatCard label="我的消息" value={stats.messages.toString()} icon={MessageSquare} trend={getTrend("messages")} color="primary" />
+        <StatCard label="智能问数" value={stats.queries.toString()} icon={Search} trend={getTrend("ask_records")} color="info" />
+        <StatCard label="知识库检索" value={stats.knowledge.toString()} icon={BookOpen} trend={getTrend("collected")} color="purple" />
+        <StatCard label="技能调用" value={stats.skills.toString()} icon={Wand2} trend={getTrend("model_calls")} color="success" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -88,11 +103,11 @@ export function UserDashboard() {
           <CardContent className="p-4">
             <SectionHeader title="活动趋势" />
             <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={activityData}>
+              <BarChart data={activityData.map(item => ({ ...item, date: formatDateLabel(item.date) }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" />
                 <XAxis dataKey="date" className="text-xs text-muted-foreground" />
                 <YAxis className="text-xs text-muted-foreground" />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "6px" }}
                   formatter={(value, name) => [`${value}`, name as string]}
                 />
@@ -107,11 +122,11 @@ export function UserDashboard() {
 
         <Card>
           <CardContent className="p-4">
-            <SectionHeader title="情感分析分布" />
+            <SectionHeader title="聊天风险分布" />
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
-                  data={sentimentData}
+                  data={sentimentData.length > 0 ? sentimentData : [{ name: "无数据", value: 1, color: "#6B7280" }]}
                   cx="50%"
                   cy="50%"
                   innerRadius={50}
@@ -121,13 +136,13 @@ export function UserDashboard() {
                   label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                   labelLine={false}
                 >
-                  {sentimentData.map((entry, index) => (
+                  {(sentimentData.length > 0 ? sentimentData : [{ name: "无数据", value: 1, color: "#6B7280" }]).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "6px" }}
-                  formatter={(value) => [`${value ?? 0}%`, "占比"]}
+                  formatter={(value) => [`${value ?? 0}`, "数量"]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -225,17 +240,21 @@ export function UserDashboard() {
           <CardContent className="p-4">
             <SectionHeader title="问数示例" />
             <div className="space-y-2">
-              {queryExamples.slice(0, 4).map((q, i) => (
-                <button
-                  key={i}
-                  className="w-full p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors text-left"
-                >
-                  <div className="flex items-start gap-2">
-                    <Search className="w-4 h-4 text-muted-foreground mt-0.5" />
-                    <span className="text-xs text-foreground">{q}</span>
-                  </div>
-                </button>
-              ))}
+              {queryExamples.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">暂无问数记录</p>
+              ) : (
+                queryExamples.slice(0, 4).map((q, i) => (
+                  <button
+                    key={i}
+                    className="w-full p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Search className="w-4 h-4 text-muted-foreground mt-0.5" />
+                      <span className="text-xs text-foreground">{q}</span>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

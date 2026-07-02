@@ -3,12 +3,13 @@ import { Search, Paperclip, Send, MoreVertical, Trash2, AlertCircle, Clock, Chec
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { conversationApi } from "../../../lib/api";
-import type { Conversation, Message, ConversationMember } from "../../../lib/types";
+import { conversationApi, difyApi, groupApi } from "../../../lib/api";
+import type { Conversation, Message, ConversationMember, ConversationDifyAppMember, DifyApp } from "../../../lib/types";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../../../lib/auth";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { toast } from "sonner";
+import { RichMessageContent } from "@/shared/components/RichMessageContent";
 
 export function MessagesPage() {
   const { user } = useAuth();
@@ -25,6 +26,7 @@ export function MessagesPage() {
   const [hasMore, setHasMore] = useState(true);
   const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [groupMembers, setGroupMembers] = useState<ConversationMember[]>([]);
+  const [groupDifyMembers, setGroupDifyMembers] = useState<ConversationDifyAppMember[]>([]);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [showFileUploadDialog, setShowFileUploadDialog] = useState(false);
@@ -34,6 +36,10 @@ export function MessagesPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showDifyAddDialog, setShowDifyAddDialog] = useState(false);
+  const [availableDifyAgents, setAvailableDifyAgents] = useState<DifyApp[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | undefined>();
+  const [pendingDifyReplies, setPendingDifyReplies] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -129,9 +135,59 @@ export function MessagesPage() {
     if (!selectedChat || selectedConversation?.type !== "group") return;
     try {
       const conv = await conversationApi.getDetail(selectedChat);
-      setGroupMembers(conv.members || []);
+      const detail = conv as any;
+      setGroupMembers(detail.members || []);
+      setGroupDifyMembers(detail.dify_app_members || []);
+      setSelectedGroupId(detail.conversation?.group_id || detail.group_id);
     } catch {
       setGroupMembers([]);
+      setGroupDifyMembers([]);
+      setSelectedGroupId(undefined);
+    }
+  };
+
+  const fetchAvailableDifyAgents = async () => {
+    try {
+      const result = await difyApi.getApps({ use_as_digital_employee: true, page: 1, page_size: 100 });
+      setAvailableDifyAgents(result.items || []);
+    } catch {
+      setAvailableDifyAgents([]);
+    }
+  };
+
+  const handleOpenDifyAddDialog = async () => {
+    await fetchAvailableDifyAgents();
+    setShowDifyAddDialog(true);
+  };
+
+  const handleAddDifyToGroup = async (appId: number) => {
+    const groupId = selectedGroupId || selectedConversation?.group_id;
+    if (!groupId) {
+      toast.error("无法识别当前群聊");
+      return;
+    }
+    try {
+      await groupApi.addDifyApp(groupId, appId);
+      toast.success("数字员工已加入群聊");
+      setShowDifyAddDialog(false);
+      fetchGroupMembers();
+    } catch (error: any) {
+      toast.error(error?.message || "添加失败");
+    }
+  };
+
+  const handleRemoveDifyFromGroup = async (appId: number) => {
+    const groupId = selectedGroupId || selectedConversation?.group_id;
+    if (!groupId) {
+      toast.error("无法识别当前群聊");
+      return;
+    }
+    try {
+      await groupApi.removeDifyApp(groupId, appId);
+      toast.success("数字员工已移除");
+      fetchGroupMembers();
+    } catch (error: any) {
+      toast.error(error?.message || "移除失败");
     }
   };
 
@@ -157,14 +213,17 @@ export function MessagesPage() {
   };
 
   const renderMessage = (msg: Message) => (
-    <div key={msg.id} className={cn("flex gap-2 group", msg.sender_id === user?.id ? "justify-end" : "justify-start")}>
-      {msg.sender_id !== user?.id && (
+    <div key={msg.id} className={cn("flex gap-2 group", msg.sender_id === user?.id && msg.sender_type !== "dify_app" ? "justify-end" : "justify-start")}>
+      {(msg.sender_id !== user?.id || msg.sender_type === "dify_app") && (
         <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center flex-shrink-0">
-          {msg.sender_name.charAt(0)}
+          {(msg.sender_display_name || msg.sender_name || "?").charAt(0)}
         </div>
       )}
       <div className={cn("max-w-[70%]")}>
-        <div className={cn("px-3 py-2 rounded-lg text-sm", msg.sender_id === user?.id ? "bg-primary text-primary-foreground" : "bg-muted text-foreground")}>
+        {msg.sender_type === "dify_app" && (
+          <div className="mb-1 text-[10px] text-muted-foreground">{msg.sender_display_name || msg.sender_name}</div>
+        )}
+        <div className={cn("px-3 py-2 rounded-lg text-sm", msg.sender_id === user?.id && msg.sender_type !== "dify_app" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground")}>
           {msg.recalled ? (
             <span className="text-muted-foreground">[消息已撤回]</span>
           ) : (
@@ -179,8 +238,10 @@ export function MessagesPage() {
                     setShowImagePreview(true);
                   }}
                 />
-              ) : (
-                msg.content
+              ) : msg.sender_type === "dify_app" && !msg.content ? (
+                  <span className="text-muted-foreground">正在生成...</span>
+                ) : (
+                  <RichMessageContent content={msg.content || ""} />
               )}
               {msg.audit_status && msg.audit_status !== "passed" && (
                 <div className="flex items-center gap-1 mt-1 text-xs">
@@ -214,7 +275,7 @@ export function MessagesPage() {
         )}
         <div className="flex items-center justify-between mt-1">
           <p className="text-[10px] text-muted-foreground">{formatDate(msg.created_at)}</p>
-          {msg.sender_id === user?.id && !msg.recalled && (
+          {msg.sender_id === user?.id && msg.sender_type !== "dify_app" && !msg.recalled && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="p-1 rounded hover:bg-muted/50 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -252,22 +313,54 @@ export function MessagesPage() {
 
   const handleSendMessage = async () => {
     if (!message.trim() || !selectedChat) return;
+    const outgoingContent = message.trim();
+    const tempId = -Date.now();
+    const shouldWaitForDify = selectedConversation?.type === "group" && groupDifyMembers.some(member => outgoingContent.includes(`@${member.name}`));
+    const optimisticMessage: Message = {
+      id: tempId,
+      conversation_id: selectedChat,
+      sender_id: user?.id || 0,
+      sender_name: user?.nickname || user?.username || "",
+      sender_type: "user",
+      message_type: "text",
+      content: outgoingContent,
+      read: false,
+      recalled: false,
+      audit_status: "passed",
+      risk_level: "none",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as Message;
+
+    setMessages(prev => [optimisticMessage, ...prev]);
+    setMessage("");
+    if (shouldWaitForDify) {
+      setPendingDifyReplies(prev => prev + 1);
+    }
 
     try {
-      const result = await conversationApi.sendMessage(selectedChat, "text", message);
+      const result = await conversationApi.sendMessage(selectedChat, "text", outgoingContent);
       const data = result as any;
       const newMsg = data.message || data;
       if (newMsg) {
-        setMessages(prev => [newMsg, ...prev]);
+        setMessages(prev => prev.map(msg => msg.id === tempId ? newMsg : msg));
+        if (Array.isArray(data.assistant_messages) && data.assistant_messages.length > 0) {
+          setMessages(prev => [...data.assistant_messages, ...prev]);
+          setPendingDifyReplies(prev => Math.max(prev - data.assistant_messages.length, 0));
+        }
         if (newMsg.audit_status === "blocked") {
           toast.error("消息因违规被拦截");
         } else if (newMsg.audit_status === "reviewing") {
           toast.info("消息已进入人工复核");
         }
       }
-      setMessage("");
       fetchConversations();
     } catch (error: any) {
+      setMessages(prev => prev.filter(msg => msg.id !== tempId));
+      if (shouldWaitForDify) {
+        setPendingDifyReplies(prev => Math.max(prev - 1, 0));
+      }
+      setMessage(outgoingContent);
       toast.error(error?.message || "发送失败");
     }
   };
@@ -285,6 +378,12 @@ export function MessagesPage() {
 
   const handleMention = (member: ConversationMember) => {
     setMessage(prev => prev + `@${member.nickname || member.username} `);
+    setShowMentionMenu(false);
+    inputRef.current?.focus();
+  };
+
+  const handleDifyMention = (member: ConversationDifyAppMember) => {
+    setMessage(prev => prev + `@${member.name} `);
     setShowMentionMenu(false);
     inputRef.current?.focus();
   };
@@ -329,6 +428,9 @@ export function MessagesPage() {
     console.log("handleNewMessage called:", newMessage);
     if (newMessage.conversation_id === selectedChat) {
       setMessages(prev => [newMessage, ...prev]);
+      if (newMessage.sender_type === "dify_app") {
+        setPendingDifyReplies(prev => Math.max(prev - 1, 0));
+      }
     }
     fetchConversations();
   };
@@ -337,6 +439,10 @@ export function MessagesPage() {
     setMessages(prev => prev.map(msg => 
       msg.id === messageId ? { ...msg, recalled: true, content: "[消息已撤回]" } : msg
     ));
+  };
+
+  const handleMessageUpdated = (updatedMessage: Message) => {
+    setMessages(prev => prev.map(msg => msg.id === updatedMessage.id ? { ...msg, ...updatedMessage } : msg));
   };
 
   const handleMessageRead = (conversationId: number) => {
@@ -357,6 +463,7 @@ export function MessagesPage() {
   useWebSocket({
     onNewMessage: handleNewMessage,
     onMessageRecalled: handleMessageRecalled,
+    onMessageUpdated: handleMessageUpdated,
     onMessageRead: handleMessageRead,
     onConversationUpdated: handleConversationUpdated,
     onFriendApplication: handleFriendApplication,
@@ -547,6 +654,64 @@ export function MessagesPage() {
                         </div>
                       </DialogContent>
                     </Dialog>
+
+                    <Dialog open={showDifyAddDialog} onOpenChange={setShowDifyAddDialog}>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleOpenDifyAddDialog}>
+                          添加数字员工
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>添加数字员工</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          {groupDifyMembers.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="text-xs font-medium text-muted-foreground">已加入</div>
+                              {groupDifyMembers.map(member => (
+                                <div key={member.dify_app_id} className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+                                  <div>
+                                    <div className="text-sm font-medium">{member.name}</div>
+                                    <div className="text-xs text-muted-foreground">{member.app_type}</div>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive"
+                                    onClick={() => handleRemoveDifyFromGroup(member.dify_app_id)}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-1" />
+                                    移除
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="space-y-2">
+                            <div className="text-xs font-medium text-muted-foreground">可添加</div>
+                          {availableDifyAgents.filter(app => !groupDifyMembers.some(member => member.dify_app_id === app.id)).length === 0 ? (
+                            <div className="text-sm text-muted-foreground text-center py-6">暂无可添加的 Dify 数字员工</div>
+                          ) : (
+                            availableDifyAgents.filter(app => !groupDifyMembers.some(member => member.dify_app_id === app.id)).map(app => (
+                              <button
+                                key={app.id}
+                                onClick={() => handleAddDifyToGroup(app.id)}
+                                className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 text-left"
+                              >
+                                <div>
+                                  <div className="text-sm font-medium">{app.name}</div>
+                                  <div className="text-xs text-muted-foreground">{app.app_type}</div>
+                                </div>
+                                <span className="text-xs text-primary">添加</span>
+                              </button>
+                            ))
+                          )}
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                     
                     {/* 公告编辑（仅群主和管理员） */}
                     {selectedConversation.members?.some(
@@ -610,6 +775,20 @@ export function MessagesPage() {
                     </div>
                   )}
                   {[...messages].reverse().map(msg => renderMessage(msg))}
+                  {pendingDifyReplies > 0 && (
+                    <div className="flex gap-2 justify-start">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center flex-shrink-0">
+                        AI
+                      </div>
+                      <div className="max-w-[70%] rounded-lg px-3 py-2 text-sm bg-muted text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse [animation-delay:120ms]" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse [animation-delay:240ms]" />
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   <div ref={messagesEndRef} />
                 </>
               )}
@@ -633,6 +812,19 @@ export function MessagesPage() {
                             {(member.nickname || member.username || "?").charAt(0)}
                           </div>
                           <span className="text-sm">{member.nickname || member.username}</span>
+                        </button>
+                      ))}
+                      {groupDifyMembers.map(member => (
+                        <button
+                          key={`dify-${member.dify_app_id}`}
+                          onClick={() => handleDifyMention(member)}
+                          className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 transition-colors text-left"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center">
+                            {member.name.charAt(0)}
+                          </div>
+                          <span className="text-sm">{member.name}</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground">Dify</span>
                         </button>
                       ))}
                     </div>

@@ -3,6 +3,8 @@ import type { UserPage } from "@/lib/types"
 import { TopBar } from "@/shared/components/TopBar"
 import { UserSidebar } from "@/shared/components/UserSidebar"
 import { UserDashboard } from "./pages/UserDashboard"
+import { BigScreenPage } from "../admin/pages/BigScreenPage"
+import { PublicOpinionPage } from "../admin/pages/PublicOpinionPage"
 import { MessagesPage } from "./pages/MessagesPage"
 import { ContactsPage } from "./pages/ContactsPage"
 import { QueryPage } from "./pages/QueryPage"
@@ -19,6 +21,8 @@ import { SettingsPage } from "./pages/SettingsPage"
 
 const pageTitles: Record<UserPage, string> = {
   dashboard: "工作台",
+  "big-screen": "数智大屏",
+  "public-opinion": "智能舆情",
   messages: "消息",
   contacts: "联系人",
   query: "智能问数",
@@ -56,6 +60,8 @@ export function UserApp({ onSwitch }: UserAppProps) {
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <UserDashboard />
+      case "big-screen": return <BigScreenPage />
+      case "public-opinion": return <PublicOpinionPage />
       case "messages": return <MessagesPage />
       case "contacts": return <ContactsPage onNavigate={setCurrentPage} />
       case "query": return <QueryPage />

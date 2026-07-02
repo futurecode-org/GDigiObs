@@ -58,6 +58,11 @@ class GroupMemberCreate(BaseModel):
     user_ids: List[int] = Field(..., description="要添加的用户ID列表")
 
 
+class GroupDifyAppCreate(BaseModel):
+    """添加 Dify 数字员工到群聊请求"""
+    dify_app_id: int = Field(..., description="Dify App ID")
+
+
 class GroupWithMembersResponse(BaseModel):
     """群组详情（包含成员）"""
     group: GroupResponse

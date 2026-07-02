@@ -12,7 +12,7 @@ from core.dependencies import get_current_user
 from service.conversation_service import (
     create_direct_conversation, get_conversations, get_conversation_detail,
     send_message, get_messages, mark_as_read, recall_message_service,
-    update_conversation_settings
+    update_conversation_settings, process_dify_employee_replies
 )
 from core.ws_manager import broadcast_message_new, broadcast_message_recalled, broadcast_message_read, broadcast_conversation_updated
 
@@ -70,7 +70,7 @@ def get_conversation(
 
 
 @conversation_router.post("/{conversation_id}/messages", summary="发送消息")
-def send_message_endpoint(
+async def send_message_endpoint(
     conversation_id: int,
     data: MessageCreate,
     background_tasks: BackgroundTasks,
@@ -97,6 +97,8 @@ def send_message_endpoint(
             "id": result["id"],
             "conversation_id": conversation_id,
             "sender_id": current_user.id,
+            "sender_type": result.get("sender_type", "user"),
+            "sender_display_name": result.get("sender_display_name"),
             "sender_name": current_user.nickname or current_user.username,
             "message_type": result["message_type"],
             "content": result["content"],
@@ -111,6 +113,15 @@ def send_message_endpoint(
         background_tasks.add_task(
             broadcast_conversation_updated, conversation_id, recipient_user_ids
         )
+        if data.message_type == "text" and data.content:
+            background_tasks.add_task(
+                process_dify_employee_replies,
+                db,
+                current_user,
+                conversation_id,
+                data.content,
+                recipient_user_ids,
+            )
     
     return ApiResponse.success(data=result)
 

@@ -700,13 +700,21 @@ def get_model_token_usage_service(db: Session, ctx: RequestContext, model_id: in
     # 基础查询：所有成功/失败的 Dify 调用日志（包含 token_usage）
     dify_query = db.query(DifyCallLog)
     if target_model:
-        # MySQL JSON 字段过滤：dify_metadata ->> '$.model'
-        from sqlalchemy import text as sa_text, bindparam
-        dify_query = dify_query.filter(
-            sa_text("dify_call_logs.dify_metadata ->> '$.model' = :model_key").bindparams(
-                bindparam("model_key", target_model.model_key)
+        dialect_name = db.bind.dialect.name if db.bind is not None else "mysql"
+        if dialect_name == "sqlite":
+            from sqlalchemy import func
+            dify_query = dify_query.filter(
+                func.json_extract(DifyCallLog.dify_metadata, "$.model") == target_model.model_key
             )
-        )
+        else:
+            # MySQL JSON 字段过滤：dify_metadata ->> '$.model'
+            from sqlalchemy import bindparam
+            from sqlalchemy import text as sa_text
+            dify_query = dify_query.filter(
+                sa_text("dify_call_logs.dify_metadata ->> '$.model' = :model_key").bindparams(
+                    bindparam("model_key", target_model.model_key)
+                )
+            )
     elif not ctx.is_super_admin and ctx.tenant_id:
         dify_query = dify_query.filter(DifyCallLog.tenant_id == ctx.tenant_id)
 

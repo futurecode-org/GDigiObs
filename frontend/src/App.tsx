@@ -6,6 +6,7 @@ import { AdminApp } from "./apps/admin/AdminApp";
 import { UserApp } from "./apps/user/UserApp";
 import { LoginPage } from "./apps/common/LoginPage";
 import { RegisterPage } from "./apps/common/RegisterPage";
+import { TeapotPage } from "./apps/common/TeapotPage";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function AppContent() {
@@ -33,6 +34,7 @@ function AppContent() {
     <Routes>
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route path="/register" element={isAuthenticated ? <Navigate to="/" replace /> : <RegisterPage />} />
+      <Route path="/teapot" element={<TeapotPage />} />
       <Route
         path="/*"
         element={

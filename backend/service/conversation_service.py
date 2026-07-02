@@ -1,5 +1,6 @@
 """会话管理业务逻辑层"""
 import logging
+import re
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -9,17 +10,19 @@ from dao.conversation_dao import (
     get_conversation_by_id, get_conversation_members, is_conversation_member,
     create_message, get_conversation_messages, mark_messages_as_read,
     recall_message, hide_conversation, pin_conversation, mute_conversation,
-    get_conversation_member, update_message_audit_result
+    get_conversation_member, update_message_audit_result, update_message_content
 )
 from dao.group_dao import is_group_member_muted, get_group_member
 from dao.user_dao import get_user_by_id
 from core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from core.dependencies import RequestContext
 from service.audit_risk_service import audit_message_content, create_message_audit_log, create_message_alert
-from core.ws_manager import broadcast_message_new, broadcast_message_recalled, broadcast_message_read, broadcast_conversation_updated
+from core.ws_manager import broadcast_message_new, broadcast_message_recalled, broadcast_message_read, broadcast_conversation_updated, broadcast_message_updated
 from dao.conversation_dao import get_conversation_members
 from model.user import User
 from model.conversation import Conversation, Message
+from dao.dify_dao import get_group_dify_app_members, get_dify_app_by_id
+from service.dify_service import invoke_app_service, stream_invoke_app_service
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +117,7 @@ def get_conversations(db: Session, current_user: User) -> List[Dict]:
         result.append({
             "id": conv.id,
             "type": conv.type,
+            "group_id": conv.group_id,
             "name": conv_name,
             "members": member_info,
             "last_message_at": conv.last_message_at,
@@ -156,6 +160,22 @@ def get_conversation_detail(db: Session, current_user: User, conversation_id: in
             "avatar_file_id": user.avatar_file_id,
             "role": group_member_roles.get(member.user_id) if conversation.type == "group" else None
         })
+
+    dify_app_members = []
+    if conversation.type == "group" and conversation.group_id:
+        for dify_member in get_group_dify_app_members(db, conversation.group_id):
+            app = get_dify_app_by_id(db, dify_member.dify_app_id)
+            if app and app.status != "deleted":
+                dify_app_members.append({
+                    "id": dify_member.id,
+                    "group_id": conversation.group_id,
+                    "dify_app_id": app.id,
+                    "name": app.name,
+                    "app_type": app.app_type,
+                    "status": app.status,
+                    "role": "dify_app",
+                    "joined_at": dify_member.created_at.isoformat() if dify_member.created_at else None
+                })
     
     # 获取当前用户未读数
     current_member = get_conversation_member(db, conversation_id, current_user.id)
@@ -166,9 +186,11 @@ def get_conversation_detail(db: Session, current_user: User, conversation_id: in
             "id": conversation.id,
             "tenant_id": conversation.tenant_id,
             "type": conversation.type,
+            "group_id": conversation.group_id,
             "last_message_at": conversation.last_message_at
         },
         "members": member_info,
+        "dify_app_members": dify_app_members,
         "unread_count": unread_count
     }
 
@@ -242,6 +264,8 @@ def send_message(db: Session, current_user: User, conversation_id: int,
         "id": message.id,
         "conversation_id": message.conversation_id,
         "sender_id": message.sender_id,
+        "sender_type": message.sender_type,
+        "sender_display_name": message.sender_display_name,
         "message_type": message.message_type,
         "content": message.content,
         "created_at": message.created_at,
@@ -250,8 +274,216 @@ def send_message(db: Session, current_user: User, conversation_id: int,
         "risk_tags": message.risk_tags,
         "recipient_user_ids": recipient_user_ids
     }
-    
+
     return result
+
+
+async def process_dify_employee_replies(
+    db: Session,
+    current_user: User,
+    conversation_id: int,
+    content: str,
+    recipient_user_ids: List[int]
+):
+    """后台处理群聊 @ Dify 数字员工回复并推送。"""
+    conversation = get_conversation_by_id(db, conversation_id)
+    if not conversation:
+        return
+    if conversation.type != "group" or not conversation.group_id:
+        return
+    reply_recipient_user_ids = sorted(set([*recipient_user_ids, current_user.id]))
+
+    ctx = RequestContext(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        username=current_user.username or ""
+    )
+    for group_member in get_group_dify_app_members(db, conversation.group_id):
+        app = get_dify_app_by_id(db, group_member.dify_app_id)
+        if not app or app.status != "enabled" or not app.use_as_digital_employee:
+            continue
+
+        mention_pattern = re.compile(rf"@{re.escape(app.name)}(?:\s|$)")
+        if not mention_pattern.search(content):
+            continue
+
+        query = mention_pattern.sub("", content).strip()
+        if not query:
+            query = content.replace(f"@{app.name}", "").strip()
+
+        if app.response_mode == "streaming":
+            reply = create_message(
+                db,
+                current_user.tenant_id,
+                conversation.id,
+                current_user.id,
+                "text",
+                "",
+                None,
+                "passed",
+                "none",
+                [],
+                sender_type="dify_app",
+                sender_display_name=app.name,
+                dify_app_id=app.id
+            )
+            message_data = _format_dify_reply_message(reply)
+            await broadcast_message_new(conversation_id, message_data, reply_recipient_user_ids)
+            await broadcast_conversation_updated(conversation_id, reply_recipient_user_ids)
+
+            answer = ""
+            async for event in stream_invoke_app_service(
+                db,
+                ctx,
+                app.id,
+                inputs={},
+                query=query,
+                conversation_id=None,
+                files=None,
+                scene="group_chat",
+                system_conversation_id=conversation.id
+            ):
+                chunk = event.get("answer")
+                if not chunk and isinstance(event.get("data"), dict):
+                    chunk = event["data"].get("answer")
+                if not chunk:
+                    continue
+                answer += chunk
+                updated = update_message_content(db, reply.id, answer)
+                if updated:
+                    await broadcast_message_updated(conversation_id, _format_dify_reply_message(updated), reply_recipient_user_ids)
+
+            if not answer:
+                updated = update_message_content(db, reply.id, "Dify 应用未返回内容")
+                if updated:
+                    await broadcast_message_updated(conversation_id, _format_dify_reply_message(updated), reply_recipient_user_ids)
+            continue
+
+        invoke_result = await invoke_app_service(
+            db,
+            ctx,
+            app.id,
+            inputs={},
+            query=query,
+            conversation_id=None,
+            files=None,
+            scene="group_chat",
+            system_conversation_id=conversation.id
+        )
+        answer = invoke_result.get("answer") or "Dify 应用未返回内容"
+        reply = create_message(
+            db,
+            current_user.tenant_id,
+            conversation.id,
+            current_user.id,
+            "text",
+            answer,
+            None,
+            "passed",
+            "none",
+            [],
+            sender_type="dify_app",
+            sender_display_name=app.name,
+            dify_app_id=app.id
+        )
+        await broadcast_message_new(conversation_id, _format_dify_reply_message(reply), reply_recipient_user_ids)
+        await broadcast_conversation_updated(conversation_id, reply_recipient_user_ids)
+
+
+def _format_dify_reply_message(reply: Message) -> Dict:
+    return {
+        "id": reply.id,
+        "conversation_id": reply.conversation_id,
+        "sender_id": reply.sender_id,
+        "sender_type": reply.sender_type,
+        "sender_display_name": reply.sender_display_name,
+        "sender_name": reply.sender_display_name,
+        "dify_app_id": reply.dify_app_id,
+        "message_type": reply.message_type,
+        "content": reply.content,
+        "created_at": reply.created_at.isoformat() if reply.created_at else None,
+        "recalled_at": None,
+        "recalled": False,
+        "audit_status": reply.audit_status,
+        "risk_level": reply.risk_level,
+        "risk_tags": reply.risk_tags,
+    }
+
+
+async def _call_mentioned_dify_employees(
+    db: Session, current_user: User, conversation: Conversation, content: str
+) -> List[Dict]:
+    """群聊中 @ Dify 数字员工后调用 Dify，并将回复作为消息落库。"""
+    if conversation.type != "group" or not conversation.group_id:
+        return []
+
+    group_dify_members = get_group_dify_app_members(db, conversation.group_id)
+    if not group_dify_members:
+        return []
+
+    ctx = RequestContext(
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        username=current_user.username or ""
+    )
+    replies = []
+    for group_member in group_dify_members:
+        app = get_dify_app_by_id(db, group_member.dify_app_id)
+        if not app or app.status != "enabled" or not app.use_as_digital_employee:
+            continue
+
+        mention_pattern = re.compile(rf"@{re.escape(app.name)}(?:\s|$)")
+        if not mention_pattern.search(content):
+            continue
+
+        query = mention_pattern.sub("", content).strip()
+        if not query:
+            query = content.replace(f"@{app.name}", "").strip()
+
+        invoke_result = await invoke_app_service(
+            db,
+            ctx,
+            app.id,
+            inputs={},
+            query=query,
+            conversation_id=None,
+            files=None,
+            scene="group_chat",
+            system_conversation_id=conversation.id
+        )
+        answer = invoke_result.get("answer") or "Dify 应用未返回内容"
+        reply = create_message(
+            db,
+            current_user.tenant_id,
+            conversation.id,
+            current_user.id,
+            "text",
+            answer,
+            None,
+            "passed",
+            "none",
+            [],
+            sender_type="dify_app",
+            sender_display_name=app.name,
+            dify_app_id=app.id
+        )
+        replies.append({
+            "id": reply.id,
+            "conversation_id": reply.conversation_id,
+            "sender_id": reply.sender_id,
+            "sender_type": reply.sender_type,
+            "sender_display_name": reply.sender_display_name,
+            "sender_name": reply.sender_display_name,
+            "dify_app_id": reply.dify_app_id,
+            "message_type": reply.message_type,
+            "content": reply.content,
+            "created_at": reply.created_at,
+            "audit_status": reply.audit_status,
+            "risk_level": reply.risk_level,
+            "risk_tags": reply.risk_tags,
+        })
+
+    return replies
 
 
 def get_messages(db: Session, current_user: User, conversation_id: int, 
@@ -270,7 +502,10 @@ def get_messages(db: Session, current_user: User, conversation_id: int,
         message_list.append({
             "id": msg.id,
             "sender_id": msg.sender_id,
-            "sender_name": sender.nickname or sender.username if sender else "",
+            "sender_type": msg.sender_type,
+            "sender_display_name": msg.sender_display_name,
+            "dify_app_id": msg.dify_app_id,
+            "sender_name": msg.sender_display_name if msg.sender_type == "dify_app" else (sender.nickname or sender.username if sender else ""),
             "message_type": msg.message_type,
             "content": msg.content,
             "file_id": msg.file_id,

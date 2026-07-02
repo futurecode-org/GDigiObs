@@ -145,10 +145,11 @@ async def test_provider_service(db: Session, ctx: RequestContext, provider_id: i
 
 
 def get_apps_service(db: Session, ctx: RequestContext, app_type: str = None,
+                     use_as_digital_employee: bool = None,
                      page: int = 1, page_size: int = 20) -> Dict:
     """获取 Dify App 列表"""
-    apps = get_dify_apps(db, ctx.tenant_id, app_type, page, page_size)
-    total = count_dify_apps(db, ctx.tenant_id, app_type)
+    apps = get_dify_apps(db, ctx.tenant_id, app_type, use_as_digital_employee, page, page_size)
+    total = count_dify_apps(db, ctx.tenant_id, app_type, use_as_digital_employee)
     
     return {
         "items": [DifyAppResponse.model_validate(a) for a in apps],
@@ -220,7 +221,8 @@ def delete_app_service(db: Session, ctx: RequestContext, app_id: int) -> bool:
 
 async def invoke_app_service(db: Session, ctx: RequestContext, app_id: int,
                              inputs: Dict, query: str = None, conversation_id: str = None,
-                             files: List = None, scene: str = "chat") -> Dict:
+                             files: List = None, scene: str = "chat",
+                             system_conversation_id: int = None) -> Dict:
     """调用 Dify App (Blocking)"""
     app = get_dify_app_by_id(db, app_id)
     if not app:
@@ -240,7 +242,7 @@ async def invoke_app_service(db: Session, ctx: RequestContext, app_id: int,
     
     if not conversation_id and app.conversation_enabled:
         existing_conv = get_dify_conversation(
-            db, ctx.tenant_id, ctx.user_id, app_id, scene, None
+            db, ctx.tenant_id, ctx.user_id, app_id, scene, system_conversation_id
         )
         if existing_conv:
             conversation_id = existing_conv.dify_conversation_id
@@ -253,11 +255,12 @@ async def invoke_app_service(db: Session, ctx: RequestContext, app_id: int,
     
     if result.conversation_id and app.conversation_enabled:
         existing_conv = get_dify_conversation(
-            db, ctx.tenant_id, ctx.user_id, app_id, scene, None
+            db, ctx.tenant_id, ctx.user_id, app_id, scene, system_conversation_id
         )
         if not existing_conv:
             create_dify_conversation(
-                db, ctx.tenant_id, ctx.user_id, app_id, scene, result.conversation_id
+                db, ctx.tenant_id, ctx.user_id, app_id, scene, result.conversation_id,
+                system_conversation_id=system_conversation_id
             )
     
     create_dify_call_log(
@@ -293,10 +296,34 @@ async def invoke_app_service(db: Session, ctx: RequestContext, app_id: int,
     }
 
 
+async def chat_with_dify_digital_employee_service(
+    db: Session, ctx: RequestContext, app_id: int, message: str,
+    conversation_id: str = None, files: List = None
+) -> Dict:
+    """数字员工页面中直接与 Dify App 对话。"""
+    app = get_dify_app_by_id(db, app_id)
+    if not app:
+        raise NotFoundException("App不存在")
+    if not app.use_as_digital_employee:
+        raise BadRequestException("该 App 未开启用作数字员工")
+
+    return await invoke_app_service(
+        db,
+        ctx,
+        app_id,
+        inputs={},
+        query=message,
+        conversation_id=conversation_id,
+        files=files,
+        scene="digital_employee"
+    )
+
+
 async def stream_invoke_app_service(db: Session, ctx: RequestContext, app_id: int,
                                     inputs: Dict, query: str = None,
                                     conversation_id: str = None, files: List = None,
-                                    scene: str = "chat"):
+                                    scene: str = "chat",
+                                    system_conversation_id: int = None):
     """调用 Dify App (Streaming)"""
     app = get_dify_app_by_id(db, app_id)
     if not app:
@@ -314,7 +341,7 @@ async def stream_invoke_app_service(db: Session, ctx: RequestContext, app_id: in
     
     if not conversation_id and app.conversation_enabled:
         existing_conv = get_dify_conversation(
-            db, ctx.tenant_id, ctx.user_id, app_id, scene, None
+            db, ctx.tenant_id, ctx.user_id, app_id, scene, system_conversation_id
         )
         if existing_conv:
             conversation_id = existing_conv.dify_conversation_id
@@ -329,7 +356,7 @@ async def stream_invoke_app_service(db: Session, ctx: RequestContext, app_id: in
     async for event in client.stream_invoke(app, inputs, query, user_identifier, conversation_id, files):
         yield event
         
-        if event.get("event") == "content" and event.get("answer"):
+        if event.get("answer"):
             full_answer += event.get("answer", "")
         
         if event.get("event") == "message_end":
@@ -342,11 +369,12 @@ async def stream_invoke_app_service(db: Session, ctx: RequestContext, app_id: in
     
     if final_conversation_id and app.conversation_enabled:
         existing_conv = get_dify_conversation(
-            db, ctx.tenant_id, ctx.user_id, app_id, scene, None
+            db, ctx.tenant_id, ctx.user_id, app_id, scene, system_conversation_id
         )
         if not existing_conv:
             create_dify_conversation(
-                db, ctx.tenant_id, ctx.user_id, app_id, scene, final_conversation_id
+                db, ctx.tenant_id, ctx.user_id, app_id, scene, final_conversation_id,
+                system_conversation_id=system_conversation_id
             )
     
     create_dify_call_log(

@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Trash2, Edit, Loader2, X, Check, Server, Search, TestTube } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -288,7 +287,7 @@ export function ChromaConfigManagement() {
                             variant="ghost"
                             size="sm"
                             className="text-destructive"
-                            onClick={() => handleDelete(config.id)}
+                            onClick={() => openDeleteDialog(config.id)}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -327,6 +326,27 @@ export function ChromaConfigManagement() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirm Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 text-sm text-muted-foreground">
+            确定要删除该 Chroma 配置吗？此操作不可恢复。
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleting}>
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />}
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create/Edit Dialog with Test Connection */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
