@@ -6,6 +6,7 @@ import { SectionHeader } from "@/shared/components/SectionHeader"
 import { Badge } from "@/components/ui/badge"
 import { skillApi } from "@/lib/api"
 import type { Skill, PaginatedData } from "@/lib/types"
+import { toast } from "sonner"
 
 export function SkillMarketPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -22,12 +23,16 @@ export function SkillMarketPage() {
   useEffect(() => {
     fetchSkills()
     fetchInstalledSkills()
-  }, [])
+  }, [selectedCategory])
 
   const fetchSkills = async () => {
     setIsLoading(true)
     try {
-      const result = await skillApi.getList({ skill_type: selectedCategory === "全部" ? undefined : typeMap[selectedCategory], page: 1, page_size: 100 }) as PaginatedData<Skill>
+      const result = (await skillApi.getPublicList({
+        keyword: searchQuery || undefined,
+        page: 1,
+        page_size: 100,
+      })) as PaginatedData<Skill>
       setSkills(result.items)
     } catch (error) {
       console.error("获取技能列表失败:", error)
@@ -39,54 +44,76 @@ export function SkillMarketPage() {
 
   const fetchInstalledSkills = async () => {
     try {
-      const mySkills = await skillApi.getList({ page: 1, page_size: 100 }) as PaginatedData<Skill>
-      const installed = new Set(mySkills.items.filter(s => s.visibility === "private").map(s => s.id))
+      const mySkills = (await skillApi.getList({ page: 1, page_size: 100 })) as PaginatedData<Skill>
+      // 以原始公开技能 ID 作为已安装判定（创建副本时记录 origin_id 更佳，当前以名称+类型近似）
+      const installed = new Set(
+        mySkills.items
+          .filter((s) => s.visibility === "personal")
+          .map((s) => s.id)
+      )
       setInstalledSkills(installed)
     } catch (error) {
       console.error("获取已安装技能失败:", error)
     }
   }
 
-  const filteredSkills = skills.filter(skill => {
+  const filteredSkills = skills.filter((skill) => {
     const matchSearch = skill.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchCategory = selectedCategory === "全部" || skill.type === typeMap[selectedCategory]
-    const matchVisibility = skill.visibility === "public"
     const isInstalled = installedSkills.has(skill.id)
-    const matchInstalled = installedFilter === "all" || (installedFilter === "installed" && isInstalled) || (installedFilter === "not_installed" && !isInstalled)
-    return matchSearch && matchCategory && matchVisibility && matchInstalled
+    const matchInstalled =
+      installedFilter === "all" ||
+      (installedFilter === "installed" && isInstalled) ||
+      (installedFilter === "not_installed" && !isInstalled)
+    return matchSearch && matchCategory && matchInstalled
   })
 
   const handleInstall = async (skillId: number) => {
+    const sourceSkill = skills.find((s) => s.id === skillId)
+    if (!sourceSkill) return
     try {
       await skillApi.create({
-        name: skills.find(s => s.id === skillId)?.name || "",
-        type: skills.find(s => s.id === skillId)?.type || "",
-        description: skills.find(s => s.id === skillId)?.description || "",
-        visibility: "private",
+        name: sourceSkill.name,
+        type: sourceSkill.type,
+        description: sourceSkill.description,
+        config: sourceSkill.config,
+        input_schema: sourceSkill.input_schema,
+        output_schema: sourceSkill.output_schema,
+        visibility: "personal",
+        status: "enabled",
       })
-      setInstalledSkills(prev => new Set([...prev, skillId]))
-    } catch (error) {
-      console.error("安装技能失败:", error)
+      setInstalledSkills((prev) => new Set([...prev, skillId]))
+      toast.success("技能已安装到个人空间")
+    } catch (error: any) {
+      toast.error(error.message || "安装技能失败")
     }
   }
 
   const handleUninstall = async (skillId: number) => {
     try {
       await skillApi.delete(skillId)
-      setInstalledSkills(prev => {
+      setInstalledSkills((prev) => {
         const newSet = new Set(prev)
         newSet.delete(skillId)
         return newSet
       })
-    } catch (error) {
-      console.error("卸载技能失败:", error)
+      toast.success("已卸载技能")
+    } catch (error: any) {
+      toast.error(error.message || "卸载技能失败")
     }
   }
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <SectionHeader title="技能市场" action={<Button size="sm"><Download className="w-4 h-4" /> 发布技能</Button>} />
+        <SectionHeader
+          title="技能市场"
+          action={
+            <Button size="sm" onClick={fetchSkills}>
+              <Download className="w-4 h-4" /> 刷新
+            </Button>
+          }
+        />
       </div>
 
       <Card>
@@ -98,21 +125,23 @@ export function SkillMarketPage() {
                 type="text"
                 placeholder="搜索技能..."
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && fetchSkills()}
                 className="w-full pl-9 pr-3 py-2 bg-muted border border-transparent rounded-lg text-sm focus:outline-none focus:border-primary transition-colors"
               />
             </div>
             <div className="flex items-center gap-2">
               <FolderOpen className="w-4 h-4 text-muted-foreground" />
               <div className="flex gap-1">
-                {categories.map(cat => (
+                {categories.map((cat) => (
                   <button
                     key={cat}
-                    onClick={() => {
-                      setSelectedCategory(cat)
-                      fetchSkills()
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${selectedCategory === cat ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                      selectedCategory === cat
+                        ? "bg-primary/10 text-primary"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
                   >
                     {cat}
                   </button>
@@ -124,12 +153,16 @@ export function SkillMarketPage() {
             {[
               { key: "all", label: "全部" },
               { key: "installed", label: "已安装" },
-              { key: "not_installed", label: "未安装" }
-            ].map(filter => (
+              { key: "not_installed", label: "未安装" },
+            ].map((filter) => (
               <button
                 key={filter.key}
                 onClick={() => setInstalledFilter(filter.key as typeof installedFilter)}
-                className={`px-3 py-1 text-xs rounded-lg transition-colors ${installedFilter === filter.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                  installedFilter === filter.key
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
               >
                 {filter.label}
               </button>
@@ -144,7 +177,7 @@ export function SkillMarketPage() {
         </div>
       ) : filteredSkills.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredSkills.map(skill => {
+          {filteredSkills.map((skill) => {
             const isInstalled = installedSkills.has(skill.id)
             return (
               <Card key={skill.id}>
@@ -160,7 +193,9 @@ export function SkillMarketPage() {
 
                   <h3 className="text-sm font-medium text-foreground mb-1">{skill.name}</h3>
                   {skill.description && (
-                    <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{skill.description}</p>
+                    <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                      {skill.description}
+                    </p>
                   )}
 
                   <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
@@ -168,8 +203,20 @@ export function SkillMarketPage() {
                       <Clock className="w-3 h-3" />
                       {skill.created_at ? new Date(skill.created_at).toLocaleDateString() : ""}
                     </span>
-                    <span className={`px-2 py-0.5 rounded ${skill.review_status === "approved" ? "bg-green-50 text-green-600" : skill.review_status === "pending" ? "bg-yellow-50 text-yellow-600" : "bg-gray-50 text-gray-600"}`}>
-                      {skill.review_status === "approved" ? "已审核" : skill.review_status === "pending" ? "审核中" : "已拒绝"}
+                    <span
+                      className={`px-2 py-0.5 rounded ${
+                        skill.review_status === "approved"
+                          ? "bg-green-50 text-green-600"
+                          : skill.review_status === "pending"
+                          ? "bg-yellow-50 text-yellow-600"
+                          : "bg-gray-50 text-gray-600"
+                      }`}
+                    >
+                      {skill.review_status === "approved"
+                        ? "已审核"
+                        : skill.review_status === "pending"
+                        ? "审核中"
+                        : "已拒绝"}
                     </span>
                   </div>
 
