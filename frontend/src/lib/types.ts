@@ -334,20 +334,39 @@ export interface AgentRun {
   updated_at: string;
 }
 
+export type SkillType = "function_call" | "mcp" | "skill";
+
 export interface Skill {
   id: number;
+  tenant_id?: number;
+  owner_id?: number;
   name: string;
-  type: string;
+  type: SkillType;
   description?: string;
-  config?: unknown;
-  input_schema?: unknown;
-  output_schema?: unknown;
-  visibility: "private" | "public";
+  config?: Record<string, unknown>;
+  input_schema?: Record<string, unknown>;
+  output_schema?: Record<string, unknown>;
+  visibility: "personal" | "tenant" | "public";
   status: string;
   review_status?: string;
-  created_by: number;
+  model_id?: number;
+  created_by?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface SkillCallLog {
+  id: number;
+  skill_id: number;
+  tenant_id?: number;
+  caller_id?: number;
+  source?: string;
+  input_data?: Record<string, unknown>;
+  output_data?: Record<string, unknown>;
+  status: string;
+  duration_ms?: number;
+  error_message?: string;
+  created_at: string;
 }
 
 export interface KnowledgeBase {

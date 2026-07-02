@@ -7,6 +7,7 @@ import type {
   AskRecord,
   AiDetectionResult,
   ChatAuditMessage,
+  ChromaConfig,
   CollectedItem,
   CollectedItemDetail,
   CollectLog,
@@ -36,6 +37,7 @@ import type {
   GroupAnnouncement,
   GroupInvitation,
   GroupJoinApplication,
+  KBRetrievalLog,
   KnowledgeBase,
   KBRetrievalLog,
   KnowledgeFile,
@@ -48,6 +50,8 @@ import type {
   OperationLog,
   PaginatedData,
   Permission,
+  QAResponse,
+  RetrieveTestResponse,
   PublicOpinionAnalyzeResponse,
   RiskOverviewResponse,
   Role,
@@ -55,6 +59,7 @@ import type {
   RetrieveTestResponse,
   SensitiveWord,
   Skill,
+  SkillCallLog,
   SystemEmailConfig,
   Tenant,
   TokenResponse,
@@ -505,8 +510,11 @@ export const agentApi = {
 };
 
 export const skillApi = {
-  getList: (params?: { skill_type?: string; page?: number; page_size?: number }): Promise<PaginatedData<Skill>> =>
+  getList: (params?: { skill_type?: string; visibility?: string; review_status?: string; keyword?: string; include_public?: boolean; page?: number; page_size?: number }): Promise<PaginatedData<Skill>> =>
     get("/skills", params),
+
+  getPublicList: (params?: { keyword?: string; page?: number; page_size?: number }): Promise<PaginatedData<Skill>> =>
+    get("/skills/public", params),
 
   getDetail: (skillId: number): Promise<Skill> =>
     get(`/skills/${skillId}`),
@@ -519,6 +527,18 @@ export const skillApi = {
 
   delete: (skillId: number): Promise<void> =>
     del(`/skills/${skillId}`),
+
+  enable: (skillId: number): Promise<void> =>
+    post(`/skills/${skillId}/enable`),
+
+  disable: (skillId: number): Promise<void> =>
+    post(`/skills/${skillId}/disable`),
+
+  test: (skillId: number, inputData?: Record<string, unknown>): Promise<{ success: boolean; output?: unknown; message?: string; duration_ms?: number }> =>
+    post(`/skills/${skillId}/test`, { input_data: inputData || {} }),
+
+  getLogs: (skillId: number, params?: { page?: number; page_size?: number }): Promise<PaginatedData<SkillCallLog>> =>
+    get(`/skills/${skillId}/logs`, params),
 
   approve: (skillId: number): Promise<void> =>
     post(`/skills/${skillId}/approve`),

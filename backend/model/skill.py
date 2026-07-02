@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from database.session import Base
 from model.base import BaseModelMixin
 
@@ -9,6 +10,7 @@ class Skill(Base, BaseModelMixin):
     
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True, comment="租户ID")
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="创建人ID")
+    model_id = Column(Integer, ForeignKey("model_configs.id"), nullable=True, index=True, comment="绑定模型ID")
     name = Column(String(100), nullable=False, comment="技能名称")
     type = Column(String(20), nullable=False, comment="技能类型: function_call/mcp/skill/dify_app")
     description = Column(Text, nullable=True, comment="描述")
@@ -19,3 +21,5 @@ class Skill(Base, BaseModelMixin):
     review_status = Column(String(20), default="draft", comment="审核状态: draft/pending/approved/rejected")
     status = Column(String(20), default="enabled", comment="状态")
     deleted_at = Column(DateTime, nullable=True, comment="删除时间")
+    
+    model = relationship("ModelConfig", lazy="selectin")

@@ -4,7 +4,7 @@ import { KnowledgeManagement } from "./KnowledgeManagement"
 export { KnowledgeManagement }
 import { useCallback, useEffect, useState } from "react"
 import type { ReactNode } from "react"
-import { Bot, ClipboardCheck, FileQuestion, KeyRound, Loader2, Network, Search, ShieldAlert, Sparkles, Workflow } from "lucide-react"
+import { Bot, ClipboardCheck, FileQuestion, KeyRound, Loader2, Network, Plus, Power, PowerOff, Search, ShieldAlert, Sparkles, Workflow } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,6 +15,8 @@ import { SectionHeader } from "@/shared/components/SectionHeader"
 import { agentApi, askApi, auditApi, rbacApi, skillApi, userApi, workflowApi } from "@/lib/api"
 import type { Agent, AskRecord, AuditLog, PaginatedData, Permission, Skill, User, Workflow as WorkflowType } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { SkillFormDialog } from "@/apps/user/components/SkillFormDialog"
 
 type Column<T> = {
   key: string
@@ -548,21 +550,207 @@ function AuditLogPage({ title, auditType, icon }: { title: string; auditType?: s
 }
 
 export function SkillManagement() {
+  const [data, setData] = useState<ListState<Skill>>(emptyList)
+  const [query, setQuery] = useState("")
+  const [visibilityFilter, setVisibilityFilter] = useState<string>("all")
+  const [reviewFilter, setReviewFilter] = useState<string>("all")
+  const [isLoading, setIsLoading] = useState(true)
+  const [formOpen, setFormOpen] = useState(false)
+
+  const load = useCallback(async (page = 1) => {
+    setIsLoading(true)
+    try {
+      const result = await skillApi.getList({
+        visibility: visibilityFilter === "all" ? undefined : visibilityFilter,
+        review_status: reviewFilter === "all" ? undefined : reviewFilter,
+        page,
+        page_size: 20
+      }) as PaginatedData<Skill>
+      setData(asItems(result))
+    } catch (error) {
+      console.error("技能管理加载失败:", error)
+      setData(emptyList<Skill>())
+    } finally {
+      setIsLoading(false)
+    }
+  }, [visibilityFilter, reviewFilter])
+
+  useEffect(() => {
+    void load(1)
+  }, [load])
+
+  const handleApprove = async (skill: Skill) => {
+    try {
+      await skillApi.approve(skill.id)
+      toast.success("已审核通过")
+      load(data.page)
+    } catch (error: any) {
+      toast.error(error.message || "审核失败")
+    }
+  }
+
+  const handleReject = async (skill: Skill) => {
+    try {
+      await skillApi.reject(skill.id)
+      toast.success("已拒绝审核")
+      load(data.page)
+    } catch (error: any) {
+      toast.error(error.message || "审核失败")
+    }
+  }
+
+  const handleToggleStatus = async (skill: Skill) => {
+    try {
+      if (skill.status === "enabled") {
+        await skillApi.disable(skill.id)
+        toast.success("已停用")
+      } else {
+        await skillApi.enable(skill.id)
+        toast.success("已启用")
+      }
+      load(data.page)
+    } catch (error: any) {
+      toast.error(error.message || "操作失败")
+    }
+  }
+
+  const visibleItems = data.items.filter(item =>
+    [item.name, item.type, item.description].some(value => value?.toLowerCase().includes(query.trim().toLowerCase()))
+  )
+
+  const visibilityLabels: Record<string, string> = { personal: "个人", tenant: "租户", public: "公开" }
+  const reviewLabels: Record<string, string> = { draft: "草稿", pending: "待审核", approved: "已通过", rejected: "已拒绝" }
+
   return (
-    <DataPage<Skill>
-      title="技能管理"
-      icon={<Sparkles className="size-5" />}
-      searchPlaceholder="搜索技能名称、类型..."
-      fetcher={page => skillApi.getList({ page, page_size: 20 })}
-      filter={(skill, query) => [skill.name, skill.type, skill.description].some(value => value?.toLowerCase().includes(query))}
-      columns={[
-        { key: "name", title: "技能", render: skill => <div><div className="font-medium">{skill.name}</div><div className="text-xs text-muted-foreground line-clamp-1 whitespace-normal">{skill.description || "-"}</div></div> },
-        { key: "type", title: "类型", render: skill => <Badge variant="outline" className="text-xs">{skill.type}</Badge> },
-        { key: "visibility", title: "可见性", render: skill => skill.visibility },
-        { key: "status", title: "状态", render: skill => statusBadge(skill.status) },
-        { key: "created", title: "创建时间", render: skill => formatDate(skill.created_at) },
-      ]}
-    />
+    <div className="h-full overflow-y-auto p-6 space-y-4">
+      <SectionHeader
+        title="技能管理"
+        subtitle="管理平台与租户范围内的技能"
+        action={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => void load(data.page)}>刷新</Button>
+            <Button size="sm" onClick={() => setFormOpen(true)}>
+              <Plus className="size-4" /> 添加技能
+            </Button>
+          </div>
+        }
+      />
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative max-w-md flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={query} onChange={event => setQuery(event.target.value)} placeholder="搜索技能名称、类型..." className="pl-9" />
+            </div>
+            <div className="flex gap-2">
+              {["all", "personal", "tenant", "public"].map(v => (
+                <button
+                  key={v}
+                  onClick={() => setVisibilityFilter(v)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs rounded-lg transition-colors",
+                    visibilityFilter === v ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  )}
+                >
+                  {v === "all" ? "全部可见性" : visibilityLabels[v]}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {["all", "draft", "pending", "approved", "rejected"].map(v => (
+                <button
+                  key={v}
+                  onClick={() => setReviewFilter(v)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs rounded-lg transition-colors",
+                    reviewFilter === v ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  )}
+                >
+                  {v === "all" ? "全部审核" : reviewLabels[v]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="size-8 animate-spin" />
+            </div>
+          ) : visibleItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <div className="mb-3 flex size-12 items-center justify-center rounded-md bg-muted"><Sparkles className="size-5" /></div>
+              <p className="text-sm">暂无数据</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>技能</TableHead>
+                  <TableHead>类型</TableHead>
+                  <TableHead>可见性</TableHead>
+                  <TableHead>审核状态</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>创建时间</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleItems.map(skill => (
+                  <TableRow key={skill.id}>
+                    <TableCell>
+                      <div><div className="font-medium">{skill.name}</div><div className="text-xs text-muted-foreground line-clamp-1 whitespace-normal">{skill.description || "-"}</div></div>
+                    </TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{skill.type}</Badge></TableCell>
+                    <TableCell>{visibilityLabels[skill.visibility] || skill.visibility}</TableCell>
+                    <TableCell>{reviewLabels[skill.review_status || "draft"] || skill.review_status}</TableCell>
+                    <TableCell>{statusBadge(skill.status)}</TableCell>
+                    <TableCell>{formatDate(skill.created_at)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {skill.review_status !== "approved" && (
+                          <Button variant="ghost" size="icon-sm" onClick={() => handleApprove(skill)} title="通过">
+                            <ClipboardCheck className="size-4" />
+                          </Button>
+                        )}
+                        {skill.review_status !== "rejected" && (
+                          <Button variant="ghost" size="icon-sm" onClick={() => handleReject(skill)} title="拒绝">
+                            <ShieldAlert className="size-4" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon-sm" onClick={() => handleToggleStatus(skill)} title={skill.status === "enabled" ? "停用" : "启用"}>
+                          {skill.status === "enabled" ? <PowerOff className="size-4" /> : <Power className="size-4" />}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {data.totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">共 {data.total} 条，第 {data.page} / {data.totalPages} 页</span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={data.page <= 1} onClick={() => void load(data.page - 1)}>上一页</Button>
+            <Button variant="outline" size="sm" disabled={data.page >= data.totalPages} onClick={() => void load(data.page + 1)}>下一页</Button>
+          </div>
+        </div>
+      )}
+
+      <SkillFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        onSuccess={() => load(data.page)}
+      />
+    </div>
   )
 }
 
