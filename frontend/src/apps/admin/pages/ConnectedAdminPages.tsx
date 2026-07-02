@@ -12,8 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SectionHeader } from "@/shared/components/SectionHeader"
-import { agentApi, askApi, auditApi, rbacApi, skillApi, userApi, workflowApi } from "@/lib/api"
-import type { Agent, AskRecord, AuditLog, PaginatedData, Permission, Skill, User, Workflow as WorkflowType } from "@/lib/types"
+import { agentApi, askApi, auditApi, difyApi, rbacApi, skillApi, userApi, workflowApi } from "@/lib/api"
+import type { Agent, AskRecord, AuditLog, DifyApp, PaginatedData, Permission, Skill, User, Workflow as WorkflowType } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { SkillFormDialog } from "@/apps/user/components/SkillFormDialog"
@@ -754,22 +754,150 @@ export function SkillManagement() {
   )
 }
 
+type AgentItem = {
+  kind: "native" | "dify"
+  id: number
+  name: string
+  status: string
+  created_at: string
+  updated_at?: string
+  role_description?: string
+  system_prompt?: string
+  skill_ids?: number[]
+  knowledge_base_ids?: number[]
+  workflow_ids?: number[]
+  app_type?: string
+  provider_id?: number
+  response_mode?: string
+  visibility?: string
+}
+
+function typeBadge(kind: "native" | "dify") {
+  return kind === "dify" ? (
+    <Badge variant="secondary" className="text-xs">Dify</Badge>
+  ) : (
+    <Badge variant="outline" className="text-xs">原生</Badge>
+  )
+}
+
 export function AgentManagement() {
+  const [items, setItems] = useState<AgentItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [query, setQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const pageSize = 20
+
+  const load = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const [agentResult, difyResult] = await Promise.all([
+        agentApi.getList({ page: 1, page_size: 100 }) as Promise<PaginatedData<Agent>>,
+        difyApi.getApps({ use_as_digital_employee: true, page: 1, page_size: 100 }) as Promise<PaginatedData<DifyApp>>,
+      ])
+      const merged: AgentItem[] = [
+        ...agentResult.items.map(a => ({ ...a, kind: "native" as const })),
+        ...difyResult.items.map(d => ({ ...d, kind: "dify" as const })),
+      ]
+      merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      setItems(merged)
+    } catch (error) {
+      console.error("加载数字员工失败:", error)
+      toast.error("加载数字员工失败")
+      setItems([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const filteredItems = items.filter(item => {
+    if (!query.trim()) return true
+    const q = query.trim().toLowerCase()
+    return [item.name, item.role_description, item.system_prompt, item.app_type].some(v => v?.toLowerCase().includes(q))
+  })
+
+  const total = filteredItems.length
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1)
+  const visibleItems = filteredItems.slice((page - 1) * pageSize, page * pageSize)
+
   return (
-    <DataPage<Agent>
-      title="数字员工"
-      icon={<Bot className="size-5" />}
-      searchPlaceholder="搜索数字员工名称、角色描述..."
-      fetcher={page => agentApi.getList({ page, page_size: 20 })}
-      filter={(agent, query) => [agent.name, agent.role_description, agent.system_prompt].some(value => value?.toLowerCase().includes(query))}
-      columns={[
-        { key: "name", title: "名称", render: agent => <span className="font-medium">{agent.name}</span> },
-        { key: "role", title: "角色描述", render: agent => <span className="line-clamp-1 whitespace-normal">{agent.role_description || "-"}</span> },
-        { key: "assets", title: "关联资源", render: agent => `${agent.skill_ids.length} 技能 / ${agent.knowledge_base_ids.length} 知识库 / ${agent.workflow_ids.length} 工作流` },
-        { key: "status", title: "状态", render: agent => statusBadge(agent.status) },
-        { key: "created", title: "创建时间", render: agent => formatDate(agent.created_at) },
-      ]}
-    />
+    <div className="h-full overflow-y-auto p-6 space-y-4">
+      <SectionHeader title="数字员工" subtitle="管理原生数字员工与 Dify 数字员工" action={<Button variant="outline" size="sm" onClick={() => void load()}>刷新</Button>} />
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={query} onChange={event => { setQuery(event.target.value); setPage(1) }} placeholder="搜索数字员工名称、角色描述..." className="pl-9" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="size-8 animate-spin" />
+            </div>
+          ) : visibleItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <div className="mb-3 flex size-12 items-center justify-center rounded-md bg-muted"><Bot className="size-5" /></div>
+              <p className="text-sm">暂无数据</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>名称</TableHead>
+                  <TableHead>类型</TableHead>
+                  <TableHead>角色 / 应用类型</TableHead>
+                  <TableHead>关联资源</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>创建时间</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleItems.map(item => (
+                  <TableRow key={`${item.kind}-${item.id}`}>
+                    <TableCell><span className="font-medium">{item.name}</span></TableCell>
+                    <TableCell>{typeBadge(item.kind)}</TableCell>
+                    <TableCell>
+                      {item.kind === "native" ? (
+                        <span className="line-clamp-1 whitespace-normal">{item.role_description || "-"}</span>
+                      ) : (
+                        <span className="line-clamp-1 whitespace-normal">{item.app_type || "-"}</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.kind === "native" ? (
+                        `${item.skill_ids?.length || 0} 技能 / ${item.knowledge_base_ids?.length || 0} 知识库 / ${item.workflow_ids?.length || 0} 工作流`
+                      ) : (
+                        `Provider ${item.provider_id || "-"}`
+                      )}
+                    </TableCell>
+                    <TableCell>{statusBadge(item.status)}</TableCell>
+                    <TableCell>{formatDate(item.created_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">共 {total} 条，第 {page} / {totalPages} 页</span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
+            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>下一页</Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
