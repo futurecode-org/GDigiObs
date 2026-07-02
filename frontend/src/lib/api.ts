@@ -26,6 +26,10 @@ import type {
   DifyModelProvider,
   DifyProvider,
   DifySyncResult,
+  DatabaseConfig,
+  DatabaseConfigSaveResponse,
+  DatabaseConfigUpdate,
+  DatabaseConnectionTestResponse,
   Friend,
   FriendApplication,
   Group,
@@ -949,6 +953,17 @@ export const systemEmailConfigApi = {
     security_protocol: string;
   }): Promise<{ message: string }> =>
     post("/notifications/admin/email-configs/test", data),
+};
+
+export const systemConfigApi = {
+  getDatabaseConfig: (): Promise<DatabaseConfig> =>
+    get("/system/database-config"),
+
+  updateDatabaseConfig: (data: DatabaseConfigUpdate): Promise<DatabaseConfigSaveResponse> =>
+    put("/system/database-config", data),
+
+  testDatabaseConfig: (data: DatabaseConfigUpdate): Promise<DatabaseConnectionTestResponse> =>
+    post("/system/database-config/test", data),
 };
 
 export const adminNotificationApi = {

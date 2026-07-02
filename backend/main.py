@@ -32,6 +32,7 @@ from controller.dify_controller import dify_router, assistant_router
 from controller.ws_controller import ws_router
 from controller.organization_controller import org_router
 from controller.dashboard_controller import dashboard_router
+from controller.system_config_controller import system_config_router
 from core.exceptions import (
     BusinessException,
     business_exception_handler,
@@ -120,6 +121,7 @@ app.include_router(dify_router, prefix="/api/v1")
 app.include_router(assistant_router, prefix="/api/v1")
 app.include_router(org_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(system_config_router, prefix="/api/v1")
 app.include_router(ws_router)
 
 

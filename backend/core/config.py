@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import List, Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -9,12 +12,22 @@ class Settings(BaseSettings):
     UVICORN_HOST: str = "0.0.0.0"
     UVICORN_PORT: int = 8000
     
-    # MySQL 配置
+    # 数据库配置
+    DATABASE_TYPE: str = "mysql"
     DATABASE_HOST: str = "47.109.147.74"
     DATABASE_PORT: int = 3306
     DATABASE_NAME: str = "cdut_liaowang"
     DATABASE_USER: str = "cdut_liaowang"
     DATABASE_PASSWORD: str = ""
+    SQLITE_DATABASE_PATH: str = "backend/data/gdigiobs.db"
+
+    @field_validator("DATABASE_TYPE")
+    @classmethod
+    def validate_database_type(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"mysql", "sqlite"}:
+            raise ValueError("DATABASE_TYPE must be mysql or sqlite")
+        return normalized
 
     # JWT 配置
     JWT_SECRET_KEY: str = "123456"
@@ -43,6 +56,11 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
+        if self.DATABASE_TYPE.lower() == "sqlite":
+            db_path = Path(self.SQLITE_DATABASE_PATH)
+            if not db_path.is_absolute():
+                db_path = PROJECT_ROOT / db_path
+            return f"sqlite:///{db_path}"
         return f"mysql+pymysql://{self.DATABASE_USER}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}?charset=utf8mb4"
 
     @property
@@ -66,7 +84,7 @@ class Settings(BaseSettings):
             return ["*"]
         return [header.strip() for header in self.CORS_ALLOW_HEADERS.split(",") if header.strip()]
 
-    model_config = {"env_file": Path(__file__).parent.parent.parent / ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {"env_file": PROJECT_ROOT / ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()

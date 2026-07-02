@@ -1,62 +1,11 @@
 """数据库自动迁移工具 - 自动创建表并添加缺失的列"""
 
 import logging
-from sqlalchemy import inspect, Column, Integer, String, Boolean, DateTime, Text, JSON
-from sqlalchemy.types import TypeEngine
+from sqlalchemy import inspect
+from sqlalchemy.schema import CreateColumn
 from database.session import Base, engine
 
 logger = logging.getLogger(__name__)
-
-# 类型映射：SQLAlchemy 类型 -> MySQL 类型
-_TYPE_MAP = {
-    Integer: "INT",
-    String: "VARCHAR",
-    Boolean: "TINYINT",
-    DateTime: "DATETIME",
-    Text: "TEXT",
-    JSON: "JSON",
-}
-
-
-def _get_column_type(column: Column) -> str:
-    """根据 SQLAlchemy 列定义生成 MySQL 类型字符串"""
-    sql_type = column.type
-
-    if isinstance(sql_type, String):
-        length = sql_type.length
-        return f"VARCHAR({length})" if length else "TEXT"
-    elif isinstance(sql_type, Integer):
-        return "INT"
-    elif isinstance(sql_type, Boolean):
-        return "TINYINT(1)"
-    elif isinstance(sql_type, DateTime):
-        return "DATETIME"
-    elif isinstance(sql_type, Text):
-        return "TEXT"
-    elif isinstance(sql_type, JSON):
-        return "JSON"
-
-    # 兜底：用编译后的类型名
-    from sqlalchemy.dialects import mysql
-
-    return sql_type.compile(dialect=mysql.dialect())
-
-
-def _get_column_default(column: Column) -> str:
-    """获取列默认值 SQL 片段"""
-    if column.default is not None:
-        default = column.default.arg
-        if callable(default):
-            if default.__name__ == "now":
-                return " DEFAULT CURRENT_TIMESTAMP"
-            return ""
-        elif isinstance(default, bool):
-            return f" DEFAULT {1 if default else 0}"
-        elif isinstance(default, int):
-            return f" DEFAULT {default}"
-        elif isinstance(default, str):
-            return f" DEFAULT '{default}'"
-    return ""
 
 
 def auto_add_missing_columns():
@@ -83,19 +32,14 @@ def auto_add_missing_columns():
             if column.name in existing_cols:
                 continue
 
-            # 构建 ALTER TABLE 语句
-            col_type = _get_column_type(column)
-            nullable = "" if not column.nullable else " NULL"
-            default = _get_column_default(column)
-            comment = f" COMMENT '{column.comment}'" if column.comment else ""
-
-            sql = (
-                f"ALTER TABLE {table_name} "
-                f"ADD COLUMN {column.name} {col_type}{nullable}{default}{comment}"
-            )
+            table = table_cls
+            preparer = engine.dialect.identifier_preparer
+            table_identifier = preparer.format_table(table)
+            column_sql = str(CreateColumn(column).compile(dialect=engine.dialect))
+            sql = f"ALTER TABLE {table_identifier} ADD COLUMN {column_sql}"
 
             try:
-                logger.info(f"添加列: {table_name}.{column.name} ({col_type})")
+                logger.info(f"添加列: {table_name}.{column.name}")
                 cursor.execute(sql)
                 added_count += 1
             except Exception as e:

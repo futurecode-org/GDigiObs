@@ -809,6 +809,38 @@ export interface SystemEmailConfig {
   updated_at: string;
 }
 
+export type DatabaseType = "mysql" | "sqlite";
+
+export interface DatabaseConfig {
+  database_type: DatabaseType;
+  database_host: string;
+  database_port: number;
+  database_name: string;
+  database_user: string;
+  sqlite_database_path: string;
+  active_database_url: string;
+}
+
+export interface DatabaseConfigUpdate {
+  database_type: DatabaseType;
+  database_host?: string;
+  database_port?: number;
+  database_name?: string;
+  database_user?: string;
+  database_password?: string;
+  sqlite_database_path?: string;
+}
+
+export interface DatabaseConfigSaveResponse {
+  restart_required: boolean;
+  database_type: DatabaseType;
+}
+
+export interface DatabaseConnectionTestResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface DashboardStats {
   users: number;
   tenants: number;
