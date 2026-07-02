@@ -20,7 +20,9 @@ export interface DifyModelProvider {
 export interface DifySyncResult {
   synced_count: number;
   total_datasets: number;
-}export interface ApiResponse<T = unknown> {
+}
+
+export interface ApiResponse<T = unknown> {
   code: number;
   message: string;
   data: T;
@@ -807,6 +809,124 @@ export interface SystemEmailConfig {
   updated_at: string;
 }
 
+export interface DashboardStats {
+  users: number;
+  tenants: number;
+  messages: number;
+  collected: number;
+  cleaned: number;
+  analyzed: number;
+  analysis_tasks: number;
+  ask_records: number;
+  model_calls: number;
+  model_tokens: number;
+  sensitive_messages: number;
+  negative_collected: number;
+  alert_count: number;
+  agent_runs: number;
+  agent_success_rate: number;
+}
+
+export interface StatChange {
+  value: number;
+  direction: "up" | "down";
+}
+
+export interface DashboardStatsResponse {
+  stats: DashboardStats;
+  changes: Record<string, StatChange>;
+}
+
+export interface TrendItem {
+  date: string;
+  messages: number;
+  queries: number;
+  tasks: number;
+  collected: number;
+  cleaned: number;
+  analyzed: number;
+  model_calls: number;
+}
+
+export interface DashboardTrendsResponse {
+  items: TrendItem[];
+  days: number;
+}
+
+export interface SentimentItem {
+  name: string;
+  value: number;
+  color?: string;
+}
+
+export interface DashboardSentimentResponse {
+  collect: SentimentItem[];
+  chat: SentimentItem[];
+}
+
+export interface KeywordItem {
+  name: string;
+  value: number;
+}
+
+export interface DashboardKeywordsResponse {
+  items: KeywordItem[];
+}
+
+export interface DashboardWordCloudResponse {
+  items: KeywordItem[];
+}
+
+export interface GeoCoord {
+  name: string;
+  value: [number, number, number];
+}
+
+export interface GeoLine {
+  from_coord: [number, number];
+  to_coord: [number, number];
+}
+
+export interface DashboardGeoResponse {
+  points: GeoCoord[];
+  lines: GeoLine[];
+  note: string;
+}
+
+export interface RiskOverviewResponse {
+  high_risk_messages: number;
+  medium_risk_messages: number;
+  low_risk_messages: number;
+  negative_collected: number;
+  unresolved_alerts: number;
+  recent_alerts: Array<{
+    id: number;
+    title: string;
+    risk_level?: string;
+    alert_type?: string;
+    created_at?: string;
+  }>;
+}
+
+export interface RiskEvent {
+  level: "high" | "medium" | "low";
+  source: "chat" | "collect";
+  title: string;
+  summary: string;
+  suggestion: string;
+}
+
+export interface PublicOpinionAnalyzeResponse {
+  summary: string;
+  risk_events: RiskEvent[];
+  sentiment_trend: Array<Record<string, unknown>>;
+  keywords: KeywordItem[];
+  suggestions: string[];
+  model_id?: number;
+  model_name?: string;
+  analyzed_at?: string;
+}
+
 export interface DifyProvider {
   id: number;
   name: string;
@@ -837,8 +957,10 @@ export interface DifyApp {
   updated_at: string;
 }
 
-export type UserPage = 
+export type UserPage =
   | "dashboard"
+  | "big-screen"
+  | "public-opinion"
   | "messages"
   | "contacts"
   | "query"
@@ -855,6 +977,8 @@ export type UserPage =
 
 export type AdminPage =
   | "dashboard"
+  | "big-screen"
+  | "public-opinion"
   | "tenants"
   | "org"
   | "users"

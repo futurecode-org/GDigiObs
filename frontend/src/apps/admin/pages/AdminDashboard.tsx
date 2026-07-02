@@ -5,14 +5,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader } from "@/shared/components/SectionHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { collectApi, modelApi, notificationApi, userApi } from "../../../lib/api";
-import type { ModelUsageRankingItem, Notification as NotificationType, User } from "../../../lib/types";
+import { collectApi, dashboardApi, modelApi, notificationApi, userApi } from "../../../lib/api";
+import type { DashboardSentimentResponse, DashboardStatsResponse, DashboardTrendsResponse, ModelUsageRankingItem, Notification as NotificationType, User } from "../../../lib/types";
 
 export function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [notifications, setNotifications] = useState<NotificationType[]>([]);
   const [stats, setStats] = useState({ users: 0, notifications: 0, collected: 0, models: 0 });
   const [modelRanking, setModelRanking] = useState<ModelUsageRankingItem[]>([]);
+  const [activityData, setActivityData] = useState<DashboardTrendsResponse["items"]>([]);
+  const [sentimentData, setSentimentData] = useState<DashboardSentimentResponse["collect"]>([]);
+  const [collectStats, setCollectStats] = useState<DashboardTrendsResponse["items"]>([]);
+  const [changes, setChanges] = useState<Record<string, { value: number; direction: "up" | "down" }>>({});
   const [rankingLoading, setRankingLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -20,12 +24,15 @@ export function AdminDashboard() {
     setIsLoading(true);
     setRankingLoading(true);
     try {
-      const [userResult, notifResult, collectResult, modelResult, rankingResult] = await Promise.all([
+      const [userResult, notifResult, collectResult, modelResult, rankingResult, statsResult, trendsResult, sentimentResult] = await Promise.all([
         userApi.getList({ page: 1, page_size: 5 }),
         notificationApi.getList({ page: 1, page_size: 3 }),
         collectApi.getItems({ page: 1, page_size: 1 }),
         modelApi.getList({ page: 1, page_size: 1 }),
-        modelApi.getUsageRanking(5)
+        modelApi.getUsageRanking(5),
+        dashboardApi.getStats(),
+        dashboardApi.getTrends(7),
+        dashboardApi.getSentiment(),
       ]);
 
       const userList = userResult.items || [];
@@ -40,11 +47,25 @@ export function AdminDashboard() {
         models: modelResult.total
       });
       setModelRanking(rankingResult || []);
+
+      const statsRes = statsResult as DashboardStatsResponse;
+      setChanges(statsRes.changes || {});
+
+      const trends = trendsResult as DashboardTrendsResponse;
+      setActivityData(trends.items || []);
+      setCollectStats(trends.items || []);
+
+      const sentiment = sentimentResult as DashboardSentimentResponse;
+      setSentimentData(sentiment.collect && sentiment.collect.length > 0 ? sentiment.collect : sentiment.chat);
     } catch {
       setUsers([]);
       setNotifications([]);
       setStats({ users: 0, notifications: 0, collected: 0, models: 0 });
       setModelRanking([]);
+      setActivityData([]);
+      setSentimentData([]);
+      setCollectStats([]);
+      setChanges({});
     } finally {
       setIsLoading(false);
       setRankingLoading(false);
@@ -55,29 +76,17 @@ export function AdminDashboard() {
     void Promise.resolve().then(fetchDashboardData);
   }, []);
 
-  const activityData = [
-    { date: "周一", messages: 1200, queries: 350, tasks: 120 },
-    { date: "周二", messages: 1500, queries: 420, tasks: 150 },
-    { date: "周三", messages: 1300, queries: 380, tasks: 100 },
-    { date: "周四", messages: 1800, queries: 520, tasks: 180 },
-    { date: "周五", messages: 1600, queries: 480, tasks: 140 },
-    { date: "周六", messages: 900, queries: 250, tasks: 80 },
-    { date: "周日", messages: 800, queries: 220, tasks: 60 },
-  ];
+  const getTrend = (key: string) => {
+    const c = changes[key];
+    return c ? (c.direction === "up" ? c.value : -c.value) : undefined;
+  };
 
-  const sentimentData = [
-    { name: "正面", value: 55, color: "#10B981" },
-    { name: "中性", value: 30, color: "#6B7280" },
-    { name: "负面", value: 15, color: "#EF4444" },
-  ];
-
-  const collectStats = [
-    { date: "周一", collected: 1500 },
-    { date: "周二", collected: 1800 },
-    { date: "周三", collected: 1200 },
-    { date: "周四", collected: 2200 },
-    { date: "周五", collected: 1900 },
-  ];
+  const weekDayMap = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const formatDateLabel = (dateStr: string) => {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return weekDayMap[d.getDay()];
+  };
 
   const getCurrencySymbol = (currency?: string) => {
     switch (currency) {
@@ -91,13 +100,18 @@ export function AdminDashboard() {
 
   const displayRanking = modelRanking.length > 0 ? modelRanking : [];
 
+  const maxMessages = Math.max(...activityData.map(d => d.messages || 0), 1);
+  const maxQueries = Math.max(...activityData.map(d => d.queries || 0), 1);
+  const maxTasks = Math.max(...activityData.map(d => d.tasks || 0), 1);
+  const maxCollected = Math.max(...collectStats.map(d => d.collected || 0), 1);
+
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="用户总数" value={stats.users.toLocaleString()} icon={Users} trend={12.5} color="primary" />
-        <StatCard label="系统通知" value={stats.notifications.toLocaleString()} icon={MessageSquare} trend={8.3} color="success" />
-        <StatCard label="数据采集量" value={stats.collected.toLocaleString()} icon={Database} trend={15.7} color="info" />
-        <StatCard label="模型配置" value={stats.models.toLocaleString()} icon={Activity} trend={-2.1} color="purple" />
+        <StatCard label="用户总数" value={stats.users.toLocaleString()} icon={Users} trend={getTrend("messages")} color="primary" />
+        <StatCard label="系统通知" value={stats.notifications.toLocaleString()} icon={MessageSquare} trend={getTrend("ask_records")} color="success" />
+        <StatCard label="数据采集量" value={stats.collected.toLocaleString()} icon={Database} trend={getTrend("collected")} color="info" />
+        <StatCard label="模型配置" value={stats.models.toLocaleString()} icon={Activity} trend={getTrend("model_calls")} color="purple" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -106,18 +120,22 @@ export function AdminDashboard() {
             <CardContent className="p-4">
               <SectionHeader title="数据概览" action={<Button variant="ghost">查看详情</Button>} />
               <div className="h-64">
-                <div className="h-full flex items-end justify-between gap-2 px-2">
-                  {activityData.map(item => (
-                    <div key={item.date} className="flex-1 flex flex-col items-center gap-2">
-                      <div className="relative w-full flex items-end justify-center gap-0.5 h-48">
-                        <div className="w-3 bg-primary/60 rounded-t" style={{ height: `${(item.messages / 2000) * 100}%` }} />
-                        <div className="w-3 bg-emerald-500/60 rounded-t" style={{ height: `${(item.queries / 600) * 100}%` }} />
-                        <div className="w-3 bg-amber-500/60 rounded-t" style={{ height: `${(item.tasks / 200) * 100}%` }} />
+                {activityData.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">暂无趋势数据</div>
+                ) : (
+                  <div className="h-full flex items-end justify-between gap-2 px-2">
+                    {activityData.map(item => (
+                      <div key={item.date} className="flex-1 flex flex-col items-center gap-2">
+                        <div className="relative w-full flex items-end justify-center gap-0.5 h-48">
+                          <div className="w-3 bg-primary/60 rounded-t" style={{ height: `${(item.messages / maxMessages) * 100}%` }} />
+                          <div className="w-3 bg-emerald-500/60 rounded-t" style={{ height: `${(item.queries / maxQueries) * 100}%` }} />
+                          <div className="w-3 bg-amber-500/60 rounded-t" style={{ height: `${(item.tasks / maxTasks) * 100}%` }} />
+                        </div>
+                        <span className="text-xs text-muted-foreground">{formatDateLabel(item.date)}</span>
                       </div>
-                      <span className="text-xs text-muted-foreground">{item.date}</span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border">
                   <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 bg-primary/60 rounded" />
@@ -141,38 +159,45 @@ export function AdminDashboard() {
           <CardContent className="p-4">
             <SectionHeader title="情感分布" />
             <div className="h-64 flex items-center justify-center">
-              <div className="relative w-48 h-48">
-                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                  {(() => {
-                    let accumulatedAngle = 0;
-                    return sentimentData.map((curr, i) => {
-                      const startAngle = accumulatedAngle;
-                      const endAngle = accumulatedAngle + (curr.value / 100) * 360;
-                      accumulatedAngle = endAngle;
-                      const startRad = (startAngle * Math.PI) / 180;
-                      const endRad = (endAngle * Math.PI) / 180;
-                      const x1 = 50 + 40 * Math.cos(startRad);
-                      const y1 = 50 + 40 * Math.sin(startRad);
-                      const x2 = 50 + 40 * Math.cos(endRad);
-                      const y2 = 50 + 40 * Math.sin(endRad);
-                      const largeArc = curr.value > 50 ? 1 : 0;
-                      return (
-                        <g key={i}>
-                          <path
-                            d={`M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArc} 1 ${x2} ${y2} Z`}
-                            fill={curr.color}
-                            className="transition-all duration-300 hover:opacity-80"
-                          />
-                        </g>
-                      );
-                    });
-                  })()}
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-foreground">100%</span>
-                  <span className="text-xs text-muted-foreground">总量</span>
+              {sentimentData.length === 0 ? (
+                <div className="text-muted-foreground text-sm">暂无情感数据</div>
+              ) : (
+                <div className="relative w-48 h-48">
+                  <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                    {(() => {
+                      const total = sentimentData.reduce((sum, s) => sum + s.value, 0) || 1;
+                      let accumulatedAngle = 0;
+                      return sentimentData.map((curr, i) => {
+                        const startAngle = accumulatedAngle;
+                        const endAngle = accumulatedAngle + (curr.value / total) * 360;
+                        accumulatedAngle = endAngle;
+                        const startRad = (startAngle * Math.PI) / 180;
+                        const endRad = (endAngle * Math.PI) / 180;
+                        const x1 = 50 + 40 * Math.cos(startRad);
+                        const y1 = 50 + 40 * Math.sin(startRad);
+                        const x2 = 50 + 40 * Math.cos(endRad);
+                        const y2 = 50 + 40 * Math.sin(endRad);
+                        const largeArc = curr.value / total > 0.5 ? 1 : 0;
+                        return (
+                          <g key={i}>
+                            <path
+                              d={`M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArc} 1 ${x2} ${y2} Z`}
+                              fill={curr.color || "#6B7280"}
+                              className="transition-all duration-300 hover:opacity-80"
+                            />
+                          </g>
+                        );
+                      });
+                    })()}
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-bold text-foreground">
+                      {sentimentData.reduce((sum, s) => sum + s.value, 0).toLocaleString()}
+                    </span>
+                    <span className="text-xs text-muted-foreground">总量</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             <div className="space-y-2 mt-4 pt-4 border-t border-border">
               {sentimentData.map(item => (
@@ -181,7 +206,7 @@ export function AdminDashboard() {
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
                     <span className="text-xs text-muted-foreground">{item.name}</span>
                   </div>
-                  <span className="text-xs font-medium text-foreground">{item.value}%</span>
+                  <span className="text-xs font-medium text-foreground">{item.value}</span>
                 </div>
               ))}
             </div>
@@ -194,15 +219,19 @@ export function AdminDashboard() {
           <CardContent className="p-4">
             <SectionHeader title="数据处理统计" />
             <div className="h-48 space-y-3">
-              {collectStats.slice(-5).map(item => (
-                <div key={item.date} className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground w-10">{item.date}</span>
-                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-cyan-500/60 rounded-full" style={{ width: `${(item.collected / 2500) * 100}%` }} />
+              {collectStats.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">暂无数据</div>
+              ) : (
+                collectStats.slice(-5).map(item => (
+                  <div key={item.date} className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-10">{formatDateLabel(item.date)}</span>
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-cyan-500/60 rounded-full" style={{ width: `${(item.collected / maxCollected) * 100}%` }} />
+                    </div>
+                    <span className="text-xs font-mono text-foreground">{item.collected}</span>
                   </div>
-                  <span className="text-xs font-mono text-foreground">{item.collected}</span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

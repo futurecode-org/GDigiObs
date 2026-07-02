@@ -4,7 +4,7 @@ import {
   Building2, Network, UserCog, LayoutGrid, Scissors,
   BarChart3, Search, AlertTriangle, Wrench, Workflow,
   BookOpen, Eye, ScrollText, ClipboardCheck,
-  Cog, MessageSquare
+  Cog, MessageSquare, Monitor, Brain
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AdminPage } from "@/lib/types"
@@ -21,6 +21,8 @@ const menuGroups = [
     label: "概览",
     items: [
       { key: "dashboard" as AdminPage, label: "工作台", icon: LayoutDashboard },
+      { key: "big-screen" as AdminPage, label: "数智大屏", icon: Monitor },
+      { key: "public-opinion" as AdminPage, label: "智能舆情", icon: Brain },
     ]
   },
   {

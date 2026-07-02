@@ -15,6 +15,12 @@ import type {
   Conversation,
   CurrentUserResponse,
   ChromaConfig,
+  DashboardGeoResponse,
+  DashboardKeywordsResponse,
+  DashboardSentimentResponse,
+  DashboardStatsResponse,
+  DashboardTrendsResponse,
+  DashboardWordCloudResponse,
   DifyAvailableModel,
   DifyApp,
   DifyModelProvider,
@@ -38,6 +44,8 @@ import type {
   OperationLog,
   PaginatedData,
   Permission,
+  PublicOpinionAnalyzeResponse,
+  RiskOverviewResponse,
   Role,
   QAResponse,
   RetrieveTestResponse,
@@ -984,4 +992,36 @@ export const difyApi = {
 
   chatDigitalEmployee: (id: number, data: { message: string; conversation_id?: string; files?: unknown[] }): Promise<{ success: boolean; answer?: string; conversation_id?: string }> =>
     post(`/dify/apps/${id}/digital-employee/chat`, data),
+};
+
+export const dashboardApi = {
+  getStats: (): Promise<DashboardStatsResponse> =>
+    get("/dashboard/stats"),
+
+  getTrends: (days: number = 7): Promise<DashboardTrendsResponse> =>
+    get("/dashboard/trends", { days }),
+
+  getSentiment: (): Promise<DashboardSentimentResponse> =>
+    get("/dashboard/sentiment"),
+
+  getKeywords: (topN: number = 20): Promise<DashboardKeywordsResponse> =>
+    get("/dashboard/keywords", { top_n: topN }),
+
+  getWordCloud: (topN: number = 100): Promise<DashboardWordCloudResponse> =>
+    get("/dashboard/wordcloud", { top_n: topN }),
+
+  getGeo: (): Promise<DashboardGeoResponse> =>
+    get("/dashboard/geo"),
+
+  getRiskOverview: (): Promise<RiskOverviewResponse> =>
+    get("/dashboard/risk-overview"),
+
+  analyzePublicOpinion: (data: {
+    data_sources?: string[];
+    days?: number;
+    chat_limit?: number;
+    collect_limit?: number;
+    model_id?: number;
+  }): Promise<PublicOpinionAnalyzeResponse> =>
+    post("/dashboard/public-opinion/analyze", data),
 };
