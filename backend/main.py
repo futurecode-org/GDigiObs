@@ -144,6 +144,12 @@ def health_check():
     return ApiResponse.success(data={"status": "healthy"})
 
 
+@app.get("/teapot", tags=["Easter Egg"], status_code=418)
+def teapot():
+    """彩蛋：418 I'm a teapot"""
+    return "I'm a teapot"
+
+
 if __name__ == "__main__":
     import uvicorn
 
